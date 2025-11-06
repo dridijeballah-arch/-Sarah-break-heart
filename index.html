@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sarah break heart</title>
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0f172a" />
+    <link rel="apple-touch-icon" href="/icon-192x192.png" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body {
+        overscroll-behavior: none;
+        touch-action: none;
+      }
+      @keyframes float-up {
+        0% {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+        100% {
+          opacity: 0;
+          transform: translateY(-50px) scale(0.8);
+        }
+      }
+      .animate-float-up {
+        animation: float-up 1.2s ease-out forwards;
+      }
+      .clearing {
+        transform: scale(0);
+        opacity: 0;
+        transition: all 300ms ease-in;
+      }
+      @keyframes shockwave {
+        0% { transform: scale(1); filter: brightness(1); }
+        40% { transform: scale(1.2); filter: brightness(1.5); }
+        100% { transform: scale(1); filter: brightness(1); }
+      }
+      .shockwave {
+        animation: shockwave 0.3s ease-out;
+      }
+
+      @keyframes selection-halo {
+        0%, 100% {
+          transform: scale(1.1);
+          box-shadow: 0 0 15px 5px rgba(251, 146, 60, 0.7); /* Un éclat orange */
+        }
+        50% {
+          transform: scale(1.15);
+          box-shadow: 0 0 25px 10px rgba(251, 146, 60, 0.5); /* Un éclat orange plus large et plus doux */
+        }
+      }
+      .selected-crystal-halo {
+        animation: selection-halo 1.5s infinite ease-in-out;
+      }
+
+      /* Animations for Special Crystals */
+      @keyframes shine-effect {
+        0% { transform: translateX(-150%) skewX(-25deg); }
+        100% { transform: translateX(150%) skewX(-25deg); }
+      }
+      .striped-shine::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 50%;
+        height: 100%;
+        background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.6) 50%, rgba(255,255,255,0) 100%);
+        animation: shine-effect 2.5s infinite linear;
+        animation-delay: 0.5s;
+      }
+
+      @keyframes wrapped-pulse {
+        0%, 100% { border-width: 4px; opacity: 0.7; }
+        50% { border-width: 6px; opacity: 1; }
+      }
+      .wrapped-animation {
+        animation: wrapped-pulse 1.5s infinite ease-in-out;
+      }
+
+      @keyframes color-bomb-glow {
+        0% { box-shadow: 0 0 12px 4px #ff00de; }
+        15% { box-shadow: 0 0 12px 4px #ff0000; }
+        30% { box-shadow: 0 0 12px 4px #ff7300; }
+        45% { box-shadow: 0 0 12px 4px #ffff00; }
+        60% { box-shadow: 0 0 12px 4px #00ff00; }
+        75% { box-shadow: 0 0 12px 4px #00ffff; }
+        90% { box-shadow: 0 0 12px 4px #0000ff; }
+        100% { box-shadow: 0 0 12px 4px #ff00de; }
+      }
+      .color-bomb-animation {
+        animation: color-bomb-glow 4s infinite linear;
+      }
+
+      /* New Special Effect Animations */
+      @keyframes crystal-formation {
+        0% { transform: scale(1.5); opacity: 0.5; filter: brightness(2); }
+        100% { transform: scale(1); opacity: 1; filter: brightness(1); }
+      }
+      .crystal-formation {
+        animation: crystal-formation 0.3s ease-out;
+      }
+
+      @keyframes crystal-activate-flash {
+        0%, 100% { 
+          filter: brightness(1); 
+          transform: scale(1);
+        }
+        50% { 
+          filter: brightness(2.5) saturate(2); 
+          transform: scale(1.2);
+          box-shadow: 0 0 20px 10px rgba(255, 255, 255, 0.7);
+        }
+      }
+      .crystal-activating {
+        animation: crystal-activate-flash 0.4s ease-in-out;
+        z-index: 20; /* S'assurer qu'il est au-dessus pendant l'animation */
+      }
+      
+      /* New Lightning Effect Animations for Striped Crystals */
+      @keyframes lightning-horizontal {
+        0% { transform: scaleX(0); opacity: 0.7; }
+        50% { transform: scaleX(1); opacity: 1; }
+        100% { transform: scaleX(1); opacity: 0; }
+      }
+
+      .lightning-horizontal-effect::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 0;
+        width: 100%;
+        height: 6px;
+        background: white;
+        border-radius: 999px;
+        transform: translateY(-50%);
+        box-shadow: 0 0 15px white, 0 0 25px white;
+        animation: lightning-horizontal 0.3s ease-out forwards;
+      }
+
+      @keyframes lightning-vertical {
+        0% { transform: scaleY(0); opacity: 0.7; }
+        50% { transform: scaleY(1); opacity: 1; }
+        100% { transform: scaleY(1); opacity: 0; }
+      }
+
+      .lightning-vertical-effect::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        top: 0;
+        height: 100%;
+        width: 6px;
+        background: white;
+        border-radius: 999px;
+        transform: translateX(-50%);
+        box-shadow: 0 0 15px white, 0 0 25px white;
+        animation: lightning-vertical 0.3s ease-out forwards;
+      }
+
+      /* Animations for Special Effects */
+      @keyframes striped-beam-travel-x {
+        from { transform: scaleX(0) translateY(-50%); }
+        to { transform: scaleX(1) translateY(-50%); }
+      }
+      @keyframes striped-beam-travel-y {
+        from { transform: scaleY(0) translateX(-50%); }
+        to { transform: scaleY(1) translateX(-50%); }
+      }
+
+      @keyframes explosion-particle {
+        0% { transform: scale(1); opacity: 1; }
+        100% { transform: scale(3); opacity: 0; }
+      }
+
+      @keyframes arc-draw {
+        to { stroke-dashoffset: 0; }
+      }
+
+      @keyframes combo-pop {
+        0% { transform: scale(0.5); opacity: 0; }
+        60% { transform: scale(1.2) rotate(-5deg); opacity: 1; }
+        100% { transform: scale(1) rotate(0deg); }
+      }
+      .animate-combo-pop {
+        animation: combo-pop 0.4s ease-out forwards;
+      }
+      
+      /* Styles for Jelly and Blockers */
+      .jelly-bg {
+        position: absolute;
+        inset: 4px; /* Slightly smaller than cell */
+        background-color: rgba(59, 130, 246, 0.4);
+        border: 2px solid rgba(147, 197, 253, 0.7);
+        border-radius: 8px;
+        transition: all 0.3s ease;
+        z-index: -1;
+      }
+      .jelly-clearing {
+        animation: jelly-pop 0.3s ease-out forwards;
+      }
+      @keyframes jelly-pop {
+        0% { transform: scale(1); opacity: 1; }
+        100% { transform: scale(1.5); opacity: 0; }
+      }
+
+      .blocker-bg {
+        position: absolute;
+        inset: 0;
+        background-color: #4b5563;
+        background-image: linear-gradient(45deg, #6b7280 25%, transparent 25%), linear-gradient(-45deg, #6b7280 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #6b7280 75%), linear-gradient(-45deg, transparent 75%, #6b7280 75%);
+        background-size: 20px 20px;
+        border-radius: 8px;
+        border: 2px solid #374151;
+        transition: all 0.3s ease;
+      }
+      .blocker-clearing {
+        animation: blocker-crack 0.3s ease-out forwards;
+      }
+      @keyframes blocker-crack {
+        0% { transform: scale(1) rotate(0); filter: brightness(1); }
+        50% { filter: brightness(2); }
+        100% { transform: scale(0.8) rotate(15deg); opacity: 0; }
+      }
+
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0"
+  }
+}
+</script>
+</head>
+  <body class="bg-slate-900">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
