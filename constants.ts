@@ -1,4 +1,3 @@
-
 // Fix: Create constants.ts to hold game configuration and constants.
 import { CrystalType, Level } from './types';
 
@@ -47,41 +46,110 @@ export const MAX_LIVES = 5;
 export const LIFE_REGEN_TIME_MS = 15 * 60 * 1000; // 15 minutes
 
 export const LEVELS: Level[] = [
-  { level: 1, moves: 20, targetScore: 1000 },
-  { level: 2, moves: 25, targetScore: 2500 },
+  { 
+    level: 1, 
+    moves: 20, 
+    targetScore: 1000,
+    targetColors: { [CrystalType.Red]: 25 }
+  },
+  { 
+    level: 2, 
+    moves: 25, 
+    targetScore: 2000,
+    targetColors: { [CrystalType.Blue]: 30, [CrystalType.Green]: 30 } 
+  },
   { 
     level: 3, 
     moves: 25, 
     targetJelly: 16,
     layout: [
-      '.j .j .j .j .j .j .j .j',
-      '.j .  .  .  .  .  . .j',
-      '.  .  .  .  .  .  .  .',
-      '.  .  .  .  .  .  .  .',
-      '.  .  .  .  .  .  .  .',
-      '.  .  .  .  .  .  .  .',
-      '.j .  .  .  .  .  . .j',
-      '.j .j .j .j .j .j .j .j',
+      '. j . j . j . j',
+      'j . j . j . j .',
+      '. . . . . . . .',
+      '. . . . . . . .',
+      '. . . . . . . .',
+      '. . . . . . . .',
+      'j . j . j . j .',
+      '. j . j . j . j',
     ] 
   },
-  { level: 4, moves: 30, targetScore: 5000 },
+  { 
+    level: 4, 
+    moves: 30, 
+    targetJelly: 32,
+    layout: [
+      'j . j . j . j .',
+      '. j . j . j . j',
+      'j . j . j . j .',
+      '. j . j . j . j',
+      'j . j . j . j .',
+      '. j . j . j . j',
+      'j . j . j . j .',
+      '. j . j . j . j',
+    ]
+  },
   { 
     level: 5, 
     moves: 30, 
     targetBlockers: 8,
     targetColors: { [CrystalType.Green]: 40, [CrystalType.Yellow]: 40 },
     layout: [
-      'X  .  .  .  .  .  .  X',
-      'X  .  .  .  .  .  .  X',
-      '.  .  .  .  .  .  .  .',
-      '.  .  .  .  .  .  .  .',
-      '.  .  .  .  .  .  .  .',
-      '.  .  .  .  .  .  .  .',
-      'X  .  .  .  .  .  .  X',
-      'X  .  .  .  .  .  .  X',
+      'X . . . . . . X',
+      'X . . . . . . X',
+      '. . . . . . . .',
+      '. . . . . . . .',
+      '. . . . . . . .',
+      '. . . . . . . .',
+      'X . . . . . . X',
+      'X . . . . . . X',
     ]
   },
-  { level: 6, moves: 35, targetScore: 10000 },
-  { level: 7, moves: 28, targetScore: 7500, targetColors: { [CrystalType.Orange]: 50 } },
-  { level: 8, moves: 40, targetScore: 20000 },
+  { 
+    level: 6, 
+    moves: 35, 
+    targetJelly: 16,
+    targetBlockers: 16,
+    layout: [
+      '. . X j j X . .',
+      '. . X j j X . .',
+      'X X . . . . X X',
+      'j j . . . . j j',
+      'j j . . . . j j',
+      'X X . . . . X X',
+      '. . X j j X . .',
+      '. . X j j X . .',
+    ]
+  },
+  { 
+    level: 7, 
+    moves: 35, 
+    targetBlockers: 16, 
+    targetColors: { [CrystalType.Orange]: 50, [CrystalType.Purple]: 50 },
+    layout: [
+      '. . . . . . . .',
+      '. X X . . X X .',
+      '. X X . . X X .',
+      '. . . . . . . .',
+      '. . . . . . . .',
+      '. X X . . X X .',
+      '. X X . . X X .',
+      '. . . . . . . .',
+    ]
+  },
+  { 
+    level: 8, 
+    moves: 40, 
+    targetJelly: 20,
+    targetBlockers: 24,
+    layout: [
+      'X X j j j j X X',
+      'X j . . . . j X',
+      'j . X X X X . j',
+      'j . X . . X . j',
+      'j . X . . X . j',
+      'j . X X X X . j',
+      'X j . . . . j X',
+      'X X j j j j X X',
+    ]
+  },
 ];
