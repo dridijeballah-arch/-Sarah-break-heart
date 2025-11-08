@@ -17,9 +17,11 @@ interface GameInfoProps {
   clearedBlockers: number;
   onBack: () => void;
   onPause: () => void;
+  onGetHint: () => void;
+  isHintLoading: boolean;
 }
 
-export const GameInfo: React.FC<GameInfoProps> = ({ score, moves, level, targetScore, targetColors, targetJelly, targetBlockers, collectedColors, clearedJelly, clearedBlockers, onBack, onPause }) => {
+export const GameInfo: React.FC<GameInfoProps> = ({ score, moves, level, targetScore, targetColors, targetJelly, targetBlockers, collectedColors, clearedJelly, clearedBlockers, onBack, onPause, onGetHint, isHintLoading }) => {
   const scoreProgress = targetScore ? Math.min((score / targetScore) * 100, 100) : 100;
   const [updatedObjectives, setUpdatedObjectives] = useState<Set<string>>(new Set());
   const prevCollectedColorsRef = useRef<Partial<Record<CrystalType, number>>>(collectedColors);
@@ -73,9 +75,14 @@ export const GameInfo: React.FC<GameInfoProps> = ({ score, moves, level, targetS
           <div className="text-sm font-bold text-cyan-300">COUPS RESTANTS</div>
           <div className="text-3xl font-bold">{moves}</div>
         </div>
-         <button onClick={onPause} className="text-3xl hover:text-cyan-300 transition-colors p-2 rounded-full hover:bg-slate-700/50">
-            ⏸️
-        </button>
+        <div className="flex items-center gap-1">
+            <button onClick={onGetHint} disabled={isHintLoading || moves <= 1} className="text-3xl hover:text-cyan-300 transition-colors p-2 rounded-full hover:bg-slate-700/50 disabled:opacity-50 disabled:cursor-wait disabled:hover:text-white">
+                {isHintLoading ? '🧠' : '🪄'}
+            </button>
+            <button onClick={onPause} className="text-3xl hover:text-cyan-300 transition-colors p-2 rounded-full hover:bg-slate-700/50">
+                ⏸️
+            </button>
+        </div>
       </div>
       
       {/* Objectives Display */}

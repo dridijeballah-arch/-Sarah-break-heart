@@ -14,6 +14,7 @@ interface GameBoardProps {
   newlyFormedCrystals: Set<string>;
   activatingCrystals: Set<string>;
   isShaking: boolean;
+  hintedTiles: [Position, Position] | null;
 }
 
 const SpecialCrystalIndicator: React.FC<{ crystal: Crystal }> = ({ crystal }) => {
@@ -46,7 +47,7 @@ const TileBackground: React.FC<{ tile: Tile, isClearing: boolean }> = ({ tile, i
     }
 }
 
-export const GameBoard: React.FC<GameBoardProps> = ({ grid, selectedCrystal, onCrystalClick, swappingCrystals, clearingTiles, shockwaveCrystals, newlyFormedCrystals, activatingCrystals, isShaking }) => {
+export const GameBoard: React.FC<GameBoardProps> = ({ grid, selectedCrystal, onCrystalClick, swappingCrystals, clearingTiles, shockwaveCrystals, newlyFormedCrystals, activatingCrystals, isShaking, hintedTiles }) => {
   const [fallTransforms, setFallTransforms] = useState<Map<string, string>>(new Map());
   const prevGridRef = useRef<GridType>(grid);
 
@@ -142,6 +143,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ grid, selectedCrystal, onC
           }
 
           const isSelected = selectedCrystal?.row === rowIndex && selectedCrystal?.col === colIndex;
+          const isHinted = hintedTiles?.some(p => p.row === rowIndex && p.col === colIndex);
           const isShockwave = shockwaveCrystals.has(`${rowIndex}-${colIndex}`);
           const isNewlyFormed = newlyFormedCrystals.has(`${rowIndex}-${colIndex}`);
           const isActivating = activatingCrystals.has(`${rowIndex}-${colIndex}`);
@@ -155,6 +157,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ grid, selectedCrystal, onC
             crystal?.special === SpecialType.ColorBomb ? 'bg-gray-200 border-gray-800 color-bomb-animation' : crystal ? CRYSTAL_COLORS[crystal.type] : '',
             (crystal?.special === SpecialType.StripedVertical || crystal?.special === SpecialType.StripedHorizontal) ? 'striped-shine' : '',
             isSelected ? 'selected-crystal-halo border-orange-400 transform scale-110' : 'hover:scale-105',
+            isHinted ? 'hint-halo' : '',
             isClearing && crystal ? 'clearing' : '',
             isShockwave ? 'shockwave' : '',
             isNewlyFormed ? 'crystal-formation' : '',

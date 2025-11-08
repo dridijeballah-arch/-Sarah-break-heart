@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sarah-break-heart-v1';
+const CACHE_NAME = 'sarah-break-heart-v4';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -15,8 +15,8 @@ const urlsToCache = [
   '/components/SpecialEffects.tsx',
   '/components/ComboDisplay.tsx',
   'https://cdn.tailwindcss.com',
-  'https://aistudiocdn.com/react@^19.2.0',
-  'https://aistudiocdn.com/react-dom@^19.2.0/'
+  'https://aistudiocdn.com/react@^18.2.0',
+  'https://aistudiocdn.com/react-dom@^18.2.0/client',
 ];
 
 self.addEventListener('install', event => {

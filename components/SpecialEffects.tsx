@@ -7,6 +7,7 @@ interface SpecialEffectsProps {
 }
 
 const StripedBeamEffect: React.FC<{ effect: ActiveEffect }> = ({ effect }) => {
+  if (!effect.position) return null;
   const isHorizontal = effect.direction === 'horizontal';
   const style: React.CSSProperties = {
     position: 'absolute',
@@ -38,6 +39,7 @@ const StripedBeamEffect: React.FC<{ effect: ActiveEffect }> = ({ effect }) => {
 };
 
 const WrappedExplosionEffect: React.FC<{ effect: ActiveEffect }> = ({ effect }) => {
+  if (!effect.position) return null;
   const particles = Array.from({ length: 12 });
   const centerX = (effect.position.col + 0.5) * 12.5;
   const centerY = (effect.position.row + 0.5) * 12.5;
@@ -83,6 +85,7 @@ const WrappedExplosionEffect: React.FC<{ effect: ActiveEffect }> = ({ effect }) 
 };
 
 const ColorBombArcsEffect: React.FC<{ effect: ActiveEffect }> = ({ effect }) => {
+    if (!effect.position) return null;
     const fromX = (effect.position.col + 0.5) * 12.5;
     const fromY = (effect.position.row + 0.5) * 12.5;
   

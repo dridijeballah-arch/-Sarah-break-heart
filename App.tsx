@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-
 import { GameBoard } from './components/GameBoard';
 import { GameInfo } from './components/GameInfo';
 import { GameOverModal } from './components/GameOverModal';
@@ -68,6 +67,10 @@ const App: React.FC = () => {
 
   const [comboCount, setComboCount] = useState(0);
 
+  // AI Hint states
+  const [isHintLoading, setIsHintLoading] = useState(false);
+  const [hintedTiles, setHintedTiles] = useState<[Position, Position] | null>(null);
+
   const isProcessingRef = useRef(false);
   const [isInputDisabled, setIsInputDisabled] = useState(false);
 
@@ -115,7 +118,7 @@ const App: React.FC = () => {
     return () => clearInterval(timer);
   }, [lives, nextLifeTimestamp]);
 
-  const loseLife = () => {
+  const loseLife = useCallback(() => {
     if (lives > 0) {
       const newLives = lives - 1;
       setLives(newLives);
@@ -123,7 +126,7 @@ const App: React.FC = () => {
         setNextLifeTimestamp(Date.now() + LIFE_REGEN_TIME_MS);
       }
     }
-  };
+  }, [lives, nextLifeTimestamp]);
 
 
   const createCrystal = (row: number, col: number, type?: CrystalType): Crystal => ({
@@ -158,6 +161,8 @@ const App: React.FC = () => {
           const keyPositions = match.map(m => m.pos);
           keyPositions.forEach(p => matches.add(`${p.row}-${p.col}`));
 
+          // For special formations, we prioritize the swapped crystal's position if applicable
+          // This is a simplification; a more robust system might track the swapped crystal
           if (match.length === 4) {
              const formationKey = `${keyPositions[1].row}-${keyPositions[1].col}`;
              specialFormations.set(formationKey, dRow === 0 ? SpecialType.StripedVertical : SpecialType.StripedHorizontal);
@@ -253,7 +258,7 @@ const App: React.FC = () => {
     setLastNonMatchingSwap(null);
     isProcessingRef.current = false;
     setIsInputDisabled(false);
-  }, [initializeGrid, lives]);
+  }, [initializeGrid, lives, loseLife]);
 
   const addFloatingScore = useCallback((score: number, position: Position) => {
     const id = `fs-${Date.now()}-${Math.random()}`;
@@ -306,7 +311,7 @@ const App: React.FC = () => {
     setIsInputDisabled(true);
 
     let gridToProcess = currentGrid;
-    let combo = 0;
+    let combo = comboCount;
     
     let tempScore = score;
     let tempCollectedColors = { ...collectedColors };
@@ -397,6 +402,8 @@ const App: React.FC = () => {
                     if (colorCounts[color]! > maxCount) { maxCount = colorCounts[color]!; colorToClear = color; }
                 });
 
+                if (!colorToClear) colorToClear = CRYSTAL_TYPES[Math.floor(Math.random() * CRYSTAL_TYPES.length)];
+
                 if (colorToClear) {
                     const targets: Position[] = [];
                     for(let r = 0; r < GRID_SIZE; r++) for(let c = 0; c < GRID_SIZE; c++) {
@@ -463,313 +470,307 @@ const App: React.FC = () => {
         setClearedJelly(tempClearedJelly);
         setClearedBlockers(tempClearedBlockers);
         
-        setClearingTiles(new Set(tilesToClear));
+        const visuallyClearingTiles = new Set(tilesToClear);
+        specialFormations.forEach((_, key) => visuallyClearingTiles.delete(key));
+
+        setClearingTiles(visuallyClearingTiles);
+        setNewlyFormedCrystals(new Set(specialFormations.keys()));
         await sleep(CLEAR_ANIMATION_DURATION);
-        setTimeout(() => setActivatingCrystals(new Set()), CLEAR_ANIMATION_DURATION);
         
-        let gridAfterClear = gridToProcess.map(row => row.map(tile => ({...tile, crystal: tile.crystal ? {...tile.crystal} : null})));
-        tilesToClear.forEach(key => {
-            const [row, col] = key.split('-').map(Number);
-            gridAfterClear[row][col].crystal = null;
-            if (gridAfterClear[row][col].background) {
-                gridAfterClear[row][col].background = null;
-            }
-        });
+        setTimeout(() => {
+          setActivatingCrystals(new Set());
+          setNewlyFormedCrystals(new Set());
+        }, CLEAR_ANIMATION_DURATION);
         
-        specialFormations.forEach((type, key) => {
+        let gridAfterClearAndTransform = gridToProcess.map((row, r) => row.map((tile, c) => {
+            const key = `${r}-${c}`;
             if (tilesToClear.has(key)) {
-                const [row, col] = key.split('-').map(Number);
-                const originalTile = gridToProcess[row][col];
-                if (originalTile.crystal) {
-                    gridAfterClear[row][col].crystal = { ...originalTile.crystal, id: `crystal-${row}-${col}-${Date.now()}`, special: type };
-                    setNewlyFormedCrystals(prev => new Set(prev).add(`${row}-${col}`));
+                const newBackground = (tile.background === BackgroundType.Blocker || tile.background === BackgroundType.Jelly) ? null : tile.background;
+                if (specialFormations.has(key)) {
+                    // Transform
+                    return {
+                        ...tile,
+                        crystal: { ...tile.crystal!, special: specialFormations.get(key)! },
+                        background: newBackground,
+                    };
+                } else {
+                    // Clear
+                    return { ...tile, crystal: null, background: newBackground };
                 }
             }
-        });
+            return tile;
+        }));
 
-        setGrid(gridAfterClear);
-        setClearingTiles(new Set());
-        
-        let gridAfterDrop = gridAfterClear.map(row => row.map(tile => ({...tile, crystal: tile.crystal ? {...tile.crystal} : null})));
-        for (let col = 0; col < GRID_SIZE; col++) {
+        const gridAfterFall = gridAfterClearAndTransform.map(row => [...row]);
+        for (let c = 0; c < GRID_SIZE; c++) {
             let emptyRow = GRID_SIZE - 1;
-            for (let row = GRID_SIZE - 1; row >= 0; row--) {
-                if (gridAfterDrop[row][col].background === BackgroundType.Blocker) continue;
-                if (gridAfterDrop[row][col].crystal) {
-                    if (row !== emptyRow) {
-                        gridAfterDrop[emptyRow][col].crystal = gridAfterDrop[row][col].crystal;
-                        gridAfterDrop[row][col].crystal = null;
+            for (let r = GRID_SIZE - 1; r >= 0; r--) {
+                 const tile = gridAfterFall[r][c];
+                if (tile.background === BackgroundType.Blocker) {
+                    emptyRow = r - 1;
+                } else if (tile.crystal) {
+                    if (emptyRow !== r) {
+                        gridAfterFall[emptyRow][c].crystal = tile.crystal;
+                        gridAfterFall[r][c].crystal = null;
                     }
                     emptyRow--;
                 }
             }
         }
-
-        await sleep(FALL_ANIMATION_DURATION);
-        setGrid(gridAfterDrop);
         
-        let gridAfterRefill = gridAfterDrop.map(row => row.map(tile => ({...tile, crystal: tile.crystal ? {...tile.crystal} : null})));
-        const newlyRefilledCrystals = new Set<string>();
-        for (let col = 0; col < GRID_SIZE; col++) {
-            for (let row = 0; row < GRID_SIZE; row++) {
-                if (gridAfterRefill[row][col].crystal === null && gridAfterRefill[row][col].background !== BackgroundType.Blocker) {
-                    gridAfterRefill[row][col].crystal = createCrystal(row, col);
-                    newlyRefilledCrystals.add(`${row}-${col}`);
+        for (let c = 0; c < GRID_SIZE; c++) {
+            for (let r = GRID_SIZE - 1; r >= 0; r--) {
+                const tile = gridAfterFall[r][c];
+                if (tile.crystal === null && tile.background !== BackgroundType.Blocker) {
+                    gridAfterFall[r][c].crystal = createCrystal(r, c);
                 }
             }
         }
         
-        if (newlyRefilledCrystals.size > 0) {
-            setNewlyFormedCrystals(prev => new Set([...prev, ...newlyRefilledCrystals]));
-        }
-        
+        setGrid(gridAfterFall);
+        gridToProcess = gridAfterFall;
         await sleep(FALL_ANIMATION_DURATION);
-        setGrid(gridAfterRefill);
-        
-        setTimeout(() => setNewlyFormedCrystals(new Set()), 400);
-
-        gridToProcess = gridAfterRefill;
     }
-
-    setComboCount(0);
-    checkWinLossConditions(initialMoves, tempScore, tempCollectedColors, tempClearedJelly, tempClearedBlockers);
     
+    if (isMove) setComboCount(0);
+    checkWinLossConditions(initialMoves, tempScore, tempCollectedColors, tempClearedJelly, tempClearedBlockers);
     isProcessingRef.current = false;
     setIsInputDisabled(false);
-  }, [findMatches, addFloatingScore, collectedColors, score, moves, checkWinLossConditions, addActiveEffect, clearedJelly, clearedBlockers]);
-  
-  const handleSpecialSwap = useCallback(async (pos1: Position, pos2: Position) => {
-      setLastNonMatchingSwap(null);
-      isProcessingRef.current = true;
-      setIsInputDisabled(true);
-
-      const newMoves = moves - 1;
-      setMoves(newMoves);
-      
-      const c1 = grid[pos1.row][pos1.col]!.crystal!;
-      const c2 = grid[pos2.row][pos2.col]!.crystal!;
-
-      setSwappingCrystals([pos1, pos2]);
-      await sleep(SWAP_ANIMATION_DURATION);
-      
-      let tempGrid = grid.map(r => r.map(t => ({...t})));
-      // The swapped specials disappear
-      tempGrid[pos1.row][pos1.col].crystal = null;
-      tempGrid[pos2.row][pos2.col].crystal = null;
-
-      setGrid(tempGrid);
-      setSwappingCrystals(null);
-
-      setActivatingCrystals(new Set([`${pos1.row}-${pos1.col}`, `${pos2.row}-${pos2.col}`]));
-      setTimeout(() => setActivatingCrystals(new Set()), EFFECT_ANIMATION_DURATION);
-
-      const comboTilesToClear = new Set<string>([`${pos1.row}-${pos1.col}`, `${pos2.row}-${pos2.col}`]);
-      const c1_type = c1.special;
-      const c2_type = c2.special;
-
-      const isStriped = (s?: SpecialType) => s === SpecialType.StripedHorizontal || s === SpecialType.StripedVertical;
-      const isWrapped = (s?: SpecialType) => s === SpecialType.Wrapped;
-      const isColorBomb = (s?: SpecialType) => s === SpecialType.ColorBomb;
-
-      if (isColorBomb(c1_type) && isColorBomb(c2_type)) {
-          addActiveEffect({ type: SpecialEffectType.DoubleColorBombClear });
-          for (let r = 0; r < GRID_SIZE; r++) for (let c = 0; c < GRID_SIZE; c++) {
-              comboTilesToClear.add(`${r}-${c}`);
-          }
-      } else if ((isColorBomb(c1_type) && isStriped(c2_type)) || (isStriped(c1_type) && isColorBomb(c2_type))) {
-          const striped = isStriped(c1_type) ? c1 : c2;
-          const colorToTransform = striped.type;
-          tempGrid.forEach((row, r) => row.forEach((tile, c) => {
-              if (tile.crystal?.type === colorToTransform) {
-                  const newStriped = { ...tile.crystal, special: Math.random() > 0.5 ? SpecialType.StripedHorizontal : SpecialType.StripedVertical };
-                  tempGrid[r][c].crystal = newStriped;
-                  comboTilesToClear.add(`${r}-${c}`);
-              }
-          }));
-      } else if ((isColorBomb(c1_type) && isWrapped(c2_type)) || (isWrapped(c1_type) && isColorBomb(c2_type))) {
-          const wrapped = isWrapped(c1_type) ? c1 : c2;
-          const colorToClear1 = wrapped.type;
-          const colorToClear2 = CRYSTAL_TYPES.filter(c => c !== colorToClear1)[Math.floor(Math.random() * (CRYSTAL_TYPES.length - 1))];
-          tempGrid.forEach((row, r) => row.forEach((tile, c) => {
-              if (tile.crystal?.type === colorToClear1 || tile.crystal?.type === colorToClear2) {
-                  comboTilesToClear.add(`${r}-${c}`);
-              }
-          }));
-      } else if ((isStriped(c1_type) && isWrapped(c2_type)) || (isWrapped(c1_type) && isStriped(c2_type))) {
-          const center = pos1;
-          addActiveEffect({ type: SpecialEffectType.StripedWrappedBlast, position: center });
-          for (let i = -1; i <= 1; i++) {
-              const r = center.row + i, c = center.col + i;
-              if (r >= 0 && r < GRID_SIZE) for (let col = 0; col < GRID_SIZE; col++) comboTilesToClear.add(`${r}-${col}`);
-              if (c >= 0 && c < GRID_SIZE) for (let row = 0; row < GRID_SIZE; row++) comboTilesToClear.add(`${row}-${c}`);
-          }
-      } else { // Default for striped+striped, wrapped+wrapped
-          comboTilesToClear.add(`${pos1.row}-${pos1.col}`);
-          comboTilesToClear.add(`${pos2.row}-${pos2.col}`);
-      }
-
-      await processMatchesAndCascades(tempGrid, false, comboTilesToClear);
-
-  }, [grid, moves, addActiveEffect, processMatchesAndCascades]);
+  }, [
+    score, collectedColors, clearedJelly, clearedBlockers, moves, findMatches, 
+    addFloatingScore, addActiveEffect, createCrystal, checkWinLossConditions, comboCount
+  ]);
 
 
   const handleCrystalClick = useCallback(async (row: number, col: number) => {
-    if (isProcessingRef.current || isInputDisabled) return;
+    if (isInputDisabled || !grid[row][col].crystal) return;
+    setHintedTiles(null);
 
-    const clickedTile = grid[row][col];
-    if (!clickedTile.crystal || clickedTile.background === BackgroundType.Blocker) return;
-
-    if (!selectedCrystal) {
-      setSelectedCrystal({ row, col });
-      return;
-    }
-
-    if (selectedCrystal.row === row && selectedCrystal.col === col) {
-      setSelectedCrystal(null);
-      return;
-    }
-
-    const dx = Math.abs(selectedCrystal.row - row);
-    const dy = Math.abs(selectedCrystal.col - col);
-    const pos1 = selectedCrystal;
-    const pos2 = { row, col };
-    setSelectedCrystal(null);
-
-    if (dx + dy === 1) { // Is adjacent
-      const tile1 = grid[pos1.row][pos1.col];
-      const tile2 = grid[pos2.row][pos2.col];
-      
-      if (!tile1.crystal || !tile2.crystal) return;
-
-      if (tile1.crystal.special || tile2.crystal.special) {
-          handleSpecialSwap(pos1, pos2);
-          return;
+    if (selectedCrystal) {
+      if (selectedCrystal.row === row && selectedCrystal.col === col) {
+        setSelectedCrystal(null);
+        return;
       }
+
+      const isAdjacent = Math.abs(selectedCrystal.row - row) + Math.abs(selectedCrystal.col - col) === 1;
       
-      isProcessingRef.current = true;
-      setIsInputDisabled(true);
-      
-      const newGrid = grid.map(r => r.map(t => ({...t})));
-      newGrid[pos1.row][pos1.col].crystal = tile2.crystal;
-      newGrid[pos2.row][pos2.col].crystal = tile1.crystal;
-      
-      setSwappingCrystals([pos1, pos2]);
-      await sleep(SWAP_ANIMATION_DURATION);
-      setGrid(newGrid);
-      setSwappingCrystals(null);
-      
-      const { matches } = findMatches(newGrid);
-      if (matches.size > 0) {
-        setLastNonMatchingSwap(null);
-        processMatchesAndCascades(newGrid, true);
+      if (isAdjacent) {
+        setIsInputDisabled(true);
+        const p1 = selectedCrystal;
+        const p2 = { row, col };
+        
+        const c1 = grid[p1.row][p1.col].crystal;
+        const c2 = grid[p2.row][p2.col].crystal;
+
+        // Handle special crystal swaps
+        if (c1?.special || c2?.special) {
+            let initialClears = new Set<string>();
+            let specialHandled = false;
+
+            const bomb = c1?.special === SpecialType.ColorBomb ? {crystal: c1, pos: p1} : (c2?.special === SpecialType.ColorBomb ? {crystal: c2, pos: p2} : null);
+            const other = bomb ? (bomb.pos === p1 ? {crystal: c2, pos: p2} : {crystal: c1, pos: p1}) : null;
+
+            if (bomb && other) {
+                specialHandled = true;
+                initialClears.add(`${bomb.pos.row}-${bomb.pos.col}`);
+                if (other.crystal?.special === SpecialType.ColorBomb) { // Double Color Bomb
+                    addActiveEffect({ type: SpecialEffectType.DoubleColorBombClear, position: bomb.pos });
+                    for (let r = 0; r < GRID_SIZE; r++) for (let c = 0; c < GRID_SIZE; c++) initialClears.add(`${r}-${c}`);
+                } else if (other.crystal?.special?.includes('Striped')) { // Bomb + Striped
+                    addActiveEffect({ type: SpecialEffectType.ColorBombArcs, position: bomb.pos, color: other.crystal.type });
+                    for (let r = 0; r < GRID_SIZE; r++) for (let c = 0; c < GRID_SIZE; c++) {
+                        if (grid[r][c].crystal?.type === other.crystal.type) {
+                           grid[r][c].crystal!.special = Math.random() > 0.5 ? SpecialType.StripedHorizontal : SpecialType.StripedVertical;
+                           initialClears.add(`${r}-${c}`);
+                        }
+                    }
+                } else { // Bomb + regular
+                    const colorToClear = other.crystal?.type;
+                    if (colorToClear) {
+                        const targets: Position[] = [];
+                        for (let r = 0; r < GRID_SIZE; r++) for (let c = 0; c < GRID_SIZE; c++) {
+                            if (grid[r][c].crystal?.type === colorToClear) {
+                                initialClears.add(`${r}-${c}`);
+                                targets.push({ row: r, col: c });
+                            }
+                        }
+                        addActiveEffect({ type: SpecialEffectType.ColorBombArcs, position: bomb.pos, color: colorToClear, targets });
+                    }
+                }
+            } else if ((c1?.special?.includes('Striped') && c2?.special === SpecialType.Wrapped) || (c2?.special?.includes('Striped') && c1?.special === SpecialType.Wrapped)) {
+                specialHandled = true;
+                initialClears.add(`${p1.row}-${p1.col}`);
+                initialClears.add(`${p2.row}-${p2.col}`);
+                for (let i = -1; i <= 1; i++) {
+                    if (p1.row + i >= 0 && p1.row + i < GRID_SIZE) for (let c = 0; c < GRID_SIZE; c++) initialClears.add(`${p1.row + i}-${c}`);
+                    if (p1.col + i >= 0 && p1.col + i < GRID_SIZE) for (let r = 0; r < GRID_SIZE; r++) initialClears.add(`${r}-${p1.col + i}`);
+                }
+                addActiveEffect({type: SpecialEffectType.StripedWrappedBlast, position: p1});
+            }
+
+            if (specialHandled) {
+                setSelectedCrystal(null);
+                setSwappingCrystals([p1, p2]); await sleep(SWAP_ANIMATION_DURATION); setSwappingCrystals(null);
+                processMatchesAndCascades(grid, true, initialClears);
+                return;
+            }
+        }
+        
+        // Normal swap logic
+        let newGrid = grid.map(r => r.map(t => ({...t, crystal: t.crystal ? {...t.crystal} : null })));
+        newGrid[p1.row][p1.col].crystal = c2;
+        newGrid[p2.row][p2.col].crystal = c1;
+
+        setSwappingCrystals([p1, p2]);
+        setGrid(newGrid);
+        await sleep(SWAP_ANIMATION_DURATION);
+        
+        const { matches } = findMatches(newGrid);
+        if (matches.size > 0) {
+            setLastNonMatchingSwap(null);
+            setSelectedCrystal(null);
+            processMatchesAndCascades(newGrid, true);
+        } else {
+            setLastNonMatchingSwap([p1, p2]);
+            setGrid(grid);
+            await sleep(SWAP_ANIMATION_DURATION);
+            setIsShaking(true);
+            setTimeout(() => setIsShaking(false), 500);
+            setIsInputDisabled(false);
+            setSelectedCrystal(null);
+        }
+        setSwappingCrystals(null);
+
       } else {
-        const newMoves = moves - 1;
-        setMoves(newMoves);
-        setLastNonMatchingSwap([pos1, pos2]);
-        isProcessingRef.current = false;
-        setIsInputDisabled(false);
-        checkWinLossConditions(newMoves, score, collectedColors, clearedJelly, clearedBlockers);
+        setSelectedCrystal({ row, col });
       }
     } else {
-      setIsShaking(true);
-      setTimeout(() => setIsShaking(false), 300);
       setSelectedCrystal({ row, col });
     }
-  }, [grid, selectedCrystal, processMatchesAndCascades, isInputDisabled, findMatches, handleSpecialSwap, moves, score, collectedColors, checkWinLossConditions, clearedJelly, clearedBlockers]);
+  }, [selectedCrystal, grid, isInputDisabled, findMatches, processMatchesAndCascades, addActiveEffect]);
+  
+  const handleGetHint = useCallback(async () => {
+    if (isHintLoading || moves <= 1 || isInputDisabled) return;
 
-  const handlePause = () => setGameState(GameState.Paused);
-  const handleResume = () => setGameState(GameState.Playing);
-  const handleBackToLevels = () => setGameState(GameState.LevelSelection);
-  const handleRestartLevel = () => startGame(currentLevelIndex, true);
-  const handleNextLevel = () => startGame(currentLevelIndex + 1);
-
-  const handleSwapBack = useCallback(async () => {
-    if (!lastNonMatchingSwap || isProcessingRef.current) return;
-
-    setGameState(GameState.Playing);
-    isProcessingRef.current = true;
+    setIsHintLoading(true);
     setIsInputDisabled(true);
+    setHintedTiles(null);
 
-    const [pos1, pos2] = lastNonMatchingSwap;
+    const findPossibleMove = (currentGrid: GridType): [Position, Position] | null => {
+        for (let r = 0; r < GRID_SIZE; r++) {
+            for (let c = 0; c < GRID_SIZE; c++) {
+                // Test swap right
+                if (c < GRID_SIZE - 1) {
+                    const tempGrid = currentGrid.map(row => row.map(tile => ({ ...tile, crystal: tile.crystal ? { ...tile.crystal } : null })));
+                    const c1 = tempGrid[r][c].crystal;
+                    const c2 = tempGrid[r][c + 1].crystal;
+                    if (c1 && c2) {
+                        tempGrid[r][c].crystal = c2;
+                        tempGrid[r][c + 1].crystal = c1;
+                        if (findMatches(tempGrid).matches.size > 0) {
+                            return [{ row: r, col: c }, { row: r, col: c + 1 }];
+                        }
+                    }
+                }
+                // Test swap down
+                if (r < GRID_SIZE - 1) {
+                    const tempGrid = currentGrid.map(row => row.map(tile => ({ ...tile, crystal: tile.crystal ? { ...tile.crystal } : null })));
+                    const c1 = tempGrid[r][c].crystal;
+                    const c2 = tempGrid[r + 1][c].crystal;
+                    if (c1 && c2) {
+                        tempGrid[r][c].crystal = c2;
+                        tempGrid[r + 1][c].crystal = c1;
+                        if (findMatches(tempGrid).matches.size > 0) {
+                            return [{ row: r, col: c }, { row: r + 1, col: c }];
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    };
 
-    const tile1 = grid[pos1.row][pos1.col];
-    const tile2 = grid[pos2.row][pos2.col];
-    
-    const newGrid = grid.map(r => r.map(t => ({...t})));
-    newGrid[pos1.row][pos1.col].crystal = tile2.crystal;
-    newGrid[pos2.row][pos2.col].crystal = tile1.crystal;
+    // Small delay for UX
+    await sleep(250);
 
-    setSwappingCrystals([pos1, pos2]);
-    await sleep(SWAP_ANIMATION_DURATION);
-    
-    setGrid(newGrid);
-    setSwappingCrystals(null);
-    setLastNonMatchingSwap(null);
-    setMoves(m => m + 1);
+    const move = findPossibleMove(grid);
 
-    isProcessingRef.current = false;
+    if (move) {
+        setMoves(prev => prev - 1);
+        setHintedTiles(move);
+        setTimeout(() => setHintedTiles(null), 3000);
+    } else {
+        console.warn('No possible moves found by local hint finder.');
+    }
+
+    setIsHintLoading(false);
     setIsInputDisabled(false);
-  }, [grid, lastNonMatchingSwap]);
+  }, [grid, isHintLoading, moves, isInputDisabled, findMatches]);
+
+  const level = LEVELS[currentLevelIndex];
 
   if (gameState === GameState.LevelSelection) {
-    return <LevelSelectionScreen onSelectLevel={(level) => startGame(level)} lives={lives} nextLifeTimestamp={nextLifeTimestamp} />;
+    return <LevelSelectionScreen onSelectLevel={startGame} lives={lives} nextLifeTimestamp={nextLifeTimestamp} />;
   }
 
-  const currentLevel = LEVELS[currentLevelIndex];
-  const isLastLevel = currentLevelIndex === LEVELS.length - 1;
-
   return (
-    <div className="bg-slate-900 min-h-screen flex flex-col items-center justify-center p-2 font-sans relative overflow-hidden">
-      <div className="relative">
+    <div className="bg-slate-900 min-h-screen flex flex-col items-center justify-center p-4 font-sans relative overflow-hidden">
         <GameInfo 
-          score={score}
-          moves={moves}
-          level={currentLevel.level}
-          targetScore={currentLevel.targetScore}
-          targetColors={currentLevel.targetColors}
-          targetJelly={currentLevel.targetJelly}
-          targetBlockers={currentLevel.targetBlockers}
-          collectedColors={collectedColors}
-          clearedJelly={clearedJelly}
-          clearedBlockers={clearedBlockers}
-          onBack={handleBackToLevels}
-          onPause={handlePause}
+            level={level.level}
+            score={score}
+            moves={moves}
+            targetScore={level.targetScore}
+            targetColors={level.targetColors}
+            targetJelly={level.targetJelly}
+            targetBlockers={level.targetBlockers}
+            collectedColors={collectedColors}
+            clearedJelly={clearedJelly}
+            clearedBlockers={clearedBlockers}
+            onBack={() => setGameState(GameState.LevelSelection)}
+            onPause={() => setGameState(GameState.Paused)}
+            onGetHint={handleGetHint}
+            isHintLoading={isHintLoading}
         />
-        <GameBoard 
-          grid={grid}
-          selectedCrystal={selectedCrystal}
-          onCrystalClick={handleCrystalClick}
-          swappingCrystals={swappingCrystals}
-          clearingTiles={clearingTiles}
-          shockwaveCrystals={shockwaveCrystals}
-          newlyFormedCrystals={newlyFormedCrystals}
-          activatingCrystals={activatingCrystals}
-          isShaking={isShaking}
+        <div className="relative">
+            <GameBoard
+                grid={grid}
+                selectedCrystal={selectedCrystal}
+                onCrystalClick={handleCrystalClick}
+                swappingCrystals={swappingCrystals}
+                clearingTiles={clearingTiles}
+                shockwaveCrystals={shockwaveCrystals}
+                newlyFormedCrystals={newlyFormedCrystals}
+                activatingCrystals={activatingCrystals}
+                isShaking={isShaking}
+                hintedTiles={hintedTiles}
+            />
+            <FloatingScores floatingScores={floatingScores} />
+            <SpecialEffects activeEffects={activeEffects} />
+            <ComboDisplay comboCount={comboCount} />
+        </div>
+        <GameOverModal
+            gameState={gameState}
+            score={score}
+            onReplayLevel={() => startGame(currentLevelIndex, true)}
+            onRestartGame={() => setGameState(GameState.LevelSelection)}
+            onNextLevel={() => { if (currentLevelIndex + 1 < LEVELS.length) startGame(currentLevelIndex + 1) }}
+            onGoToLevels={() => setGameState(GameState.LevelSelection)}
+            isLastLevel={currentLevelIndex === LEVELS.length - 1}
         />
-        <FloatingScores floatingScores={floatingScores} />
-        <SpecialEffects activeEffects={activeEffects} />
-        <ComboDisplay comboCount={comboCount} />
-      </div>
-
-      <GameOverModal
-        gameState={gameState}
-        score={score}
-        onReplayLevel={() => startGame(currentLevelIndex, true)}
-        onRestartGame={() => startGame(0)}
-        onNextLevel={handleNextLevel}
-        onGoToLevels={handleBackToLevels}
-        isLastLevel={isLastLevel}
-      />
-
-      {gameState === GameState.Paused && (
-        <PauseMenu 
-          onResume={handleResume}
-          onRestart={handleRestartLevel}
-          onQuit={handleBackToLevels}
-          onSwapBack={handleSwapBack}
-          canSwapBack={lastNonMatchingSwap !== null}
-        />
-      )}
+        {gameState === GameState.Paused && (
+            <PauseMenu
+                onResume={() => setGameState(GameState.Playing)}
+                onRestart={() => startGame(currentLevelIndex, true)}
+                onQuit={() => setGameState(GameState.LevelSelection)}
+                onSwapBack={() => {
+                    if (lastNonMatchingSwap) {
+                        setGrid(grid);
+                        setGameState(GameState.Playing);
+                    }
+                }}
+                canSwapBack={!!lastNonMatchingSwap}
+            />
+        )}
     </div>
   );
 };

@@ -55,6 +55,18 @@
         animation: selection-halo 1.5s infinite ease-in-out;
       }
 
+      @keyframes hint-halo {
+        0%, 100% {
+          box-shadow: 0 0 20px 8px rgba(56, 189, 248, 0.8); /* Lueur bleu clair pulsante */
+        }
+        50% {
+          box-shadow: 0 0 30px 12px rgba(56, 189, 248, 0.6);
+        }
+      }
+      .hint-halo {
+        animation: hint-halo 1.5s infinite ease-in-out;
+      }
+
       /* Animations for Special Crystals */
       @keyframes shine-effect {
         0% { transform: translateX(-150%) skewX(-25deg); }
@@ -244,9 +256,10 @@
   <script type="importmap">
 {
   "imports": {
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "react": "https://aistudiocdn.com/react@^19.2.0"
+    "react": "https://aistudiocdn.com/react@^18.2.0",
+    "react-dom/client": "https://aistudiocdn.com/react-dom@^18.2.0/client",
+    "react/": "https://aistudiocdn.com/react@^18.2.0/",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^18.2.0/"
   }
 }
 </script>
