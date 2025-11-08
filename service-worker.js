@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sarah-break-heart-v4';
+const CACHE_NAME = 'sarah-break-heart-v5';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -6,6 +6,8 @@ const urlsToCache = [
   '/App.tsx',
   '/types.ts',
   '/constants.ts',
+  '/sounds.ts',
+  '/utils/soundManager.ts',
   '/components/GameBoard.tsx',
   '/components/GameInfo.tsx',
   '/components/GameOverModal.tsx',

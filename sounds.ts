@@ -13,6 +13,9 @@ export enum SoundType {
   Win = 'Win',
   Lose = 'Lose',
   LevelStart = 'LevelStart',
+  ComboStripedWrapped = 'ComboStripedWrapped',
+  ComboDoubleWrapped = 'ComboDoubleWrapped',
+  ComboColorBomb = 'ComboColorBomb',
 }
 
 // Base64 encoded audio data URIs for various sound effects.
@@ -31,4 +34,7 @@ export const SOUNDS: Record<SoundType, string> = {
   [SoundType.Win]: 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA',
   [SoundType.Lose]: 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA',
   [SoundType.LevelStart]: 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA',
+  [SoundType.ComboStripedWrapped]: 'data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA',
+  [SoundType.ComboDoubleWrapped]: 'data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA',
+  [SoundType.ComboColorBomb]: 'data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA',
 };

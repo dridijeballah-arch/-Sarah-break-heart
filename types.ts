@@ -1,4 +1,3 @@
-
 // Fix: Create types.ts to define all data structures for the game.
 export enum CrystalType {
   Red = 'Red',
@@ -58,6 +57,7 @@ export interface Level {
   level: number;
   moves: number;
   targetScore?: number;
+  starScores: [number, number, number];
   targetColors?: Partial<Record<CrystalType, number>>;
   targetJelly?: number;
   targetBlockers?: number;
@@ -70,6 +70,7 @@ export enum SpecialEffectType {
     ColorBombArcs = 'ColorBombArcs',
     StripedWrappedBlast = 'StripedWrappedBlast',
     DoubleColorBombClear = 'DoubleColorBombClear',
+    DoubleWrappedBlast = 'DoubleWrappedBlast',
 }
 
 export interface ActiveEffect {

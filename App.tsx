@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GameBoard } from './components/GameBoard';
 import { GameInfo } from './components/GameInfo';
@@ -83,6 +82,10 @@ export const App: React.FC = () => {
     const savedTimestamp = localStorage.getItem('nextLifeTimestamp');
     return savedTimestamp ? parseInt(savedTimestamp, 10) : null;
   });
+  const [levelProgress, setLevelProgress] = useState<Record<number, number>>(() => {
+    const savedProgress = localStorage.getItem('sarah-heart-progress');
+    return savedProgress ? JSON.parse(savedProgress) : {};
+  });
 
   const isProcessing = useRef(false);
 
@@ -119,48 +122,59 @@ export const App: React.FC = () => {
         }
         newGrid.push(newRow);
       }
-    } while (findPossibleMoves(newGrid).length === 0);
+    } while (findPossibleMoves(newGrid).length === 0 || findMatches(newGrid).length > 0);
     return newGrid;
   }, []);
 
   const findMatches = (currentGrid: GridType): Position[][] => {
       const allMatches: Position[][] = [];
+      const checked = new Set<string>();
+
       for (let row = 0; row < GRID_SIZE; row++) {
           for (let col = 0; col < GRID_SIZE; col++) {
               const crystal = currentGrid[row][col].crystal;
-              if (!crystal) continue;
-              
-              // Horizontal
-              if (col < GRID_SIZE - 2 && crystal.type === currentGrid[row][col + 1].crystal?.type && crystal.type === currentGrid[row][col + 2].crystal?.type) {
-                  const match = [{ row, col }];
-                  let i = col + 1;
-                  while (i < GRID_SIZE && currentGrid[row][i].crystal?.type === crystal.type) {
-                      match.push({ row, col: i });
-                      i++;
-                  }
-                  allMatches.push(match);
+              if (!crystal || checked.has(`${row}-${col}`)) continue;
+
+              const match: Position[] = [];
+              const stack: Position[] = [{row, col}];
+              const visited = new Set<string>([`${row}-${col}`]);
+
+              while(stack.length > 0) {
+                  const pos = stack.pop()!;
+                  match.push(pos);
+                  [[0,1],[0,-1],[1,0],[-1,0]].forEach(([dr, dc]) => {
+                      const newR = pos.row + dr;
+                      const newC = pos.col + dc;
+                      if(newR >= 0 && newR < GRID_SIZE && newC >=0 && newC < GRID_SIZE && !visited.has(`${newR}-${newC}`) && currentGrid[newR][newC].crystal?.type === crystal.type) {
+                          stack.push({row: newR, col: newC});
+                          visited.add(`${newR}-${newC}`);
+                      }
+                  });
               }
 
-              // Vertical
-              if (row < GRID_SIZE - 2 && crystal.type === currentGrid[row + 1][col].crystal?.type && crystal.type === currentGrid[row + 2][col].crystal?.type) {
-                  const match = [{ row, col }];
-                  let i = row + 1;
-                  while (i < GRID_SIZE && currentGrid[i][col].crystal?.type === crystal.type) {
-                      match.push({ row: i, col });
-                      i++;
-                  }
-                  allMatches.push(match);
-              }
+              const rows = new Map<number, Position[]>();
+              const cols = new Map<number, Position[]>();
+              match.forEach(p => {
+                  if(!rows.has(p.row)) rows.set(p.row, []);
+                  if(!cols.has(p.col)) cols.set(p.col, []);
+                  rows.get(p.row)!.push(p);
+                  cols.get(p.col)!.push(p);
+              });
+
+              visited.forEach(v => checked.add(v));
+              
+              rows.forEach(rMatch => { if(rMatch.length >= 3) allMatches.push(rMatch) });
+              cols.forEach(cMatch => { if(cMatch.length >= 3) allMatches.push(cMatch) });
           }
       }
-      // Deduplicate matches
+
       const uniqueMatches: Position[][] = [];
       const matchedPositions = new Set<string>();
       allMatches.sort((a, b) => b.length - a.length);
       for (const match of allMatches) {
           const newMatch = match.filter(p => !matchedPositions.has(`${p.row}-${p.col}`));
           if (newMatch.length >= 3) {
-              uniqueMatches.push(newMatch);
+              uniqueMatches.push(match); // Push original match to check for L/T shapes
               newMatch.forEach(p => matchedPositions.add(`${p.row}-${p.col}`));
           }
       }
@@ -171,8 +185,14 @@ export const App: React.FC = () => {
     const moves: [Position, Position][] = [];
     const testSwap = (r1: number, c1: number, r2: number, c2: number) => {
         const tempGrid = JSON.parse(JSON.stringify(currentGrid));
-        if (!tempGrid[r1][c1].crystal || !tempGrid[r2][c2].crystal) return;
-        [tempGrid[r1][c1].crystal, tempGrid[r2][c2].crystal] = [tempGrid[r2][c2].crystal, tempGrid[r1][c1].crystal];
+        const c_1 = tempGrid[r1][c1].crystal;
+        const c_2 = tempGrid[r2][c2].crystal;
+        if (!c_1 || !c_2) return;
+        if (c_1.special === SpecialType.ColorBomb || c_2.special === SpecialType.ColorBomb) {
+            moves.push([{ row: r1, col: c1 }, { row: r2, col: c2 }]);
+            return;
+        }
+        [tempGrid[r1][c1].crystal, tempGrid[r2][c2].crystal] = [c_2, c_1];
         if (findMatches(tempGrid).length > 0) {
             moves.push([{ row: r1, col: c1 }, { row: r2, col: c2 }]);
         }
@@ -216,6 +236,8 @@ export const App: React.FC = () => {
     setLastNonInteractiveGrid(null);
     setComboCount(0);
     setSelectedCrystal(null);
+    setActiveEffects([]);
+    setFloatingScores([]);
   }, [lives, gameState, createInitialGrid, nextLifeTimestamp]);
 
   const checkWinLossConditions = useCallback(() => {
@@ -228,138 +250,90 @@ export const App: React.FC = () => {
     if (scoreMet && colorsMet && jellyMet && blockersMet) {
       playSound(SoundType.Win, 0.7);
       setGameState(GameState.Won);
+       let stars = 0;
+      if (score >= level.starScores[0]) stars = 1;
+      if (score >= level.starScores[1]) stars = 2;
+      if (score >= level.starScores[2]) stars = 3;
+      setLevelProgress(prev => {
+          const newProgress = {...prev};
+          if(stars > (newProgress[currentLevelIndex] || 0)) {
+              newProgress[currentLevelIndex] = stars;
+          }
+          return newProgress;
+      });
     } else if (moves <= 0) {
       playSound(SoundType.Lose, 0.7);
       setGameState(GameState.Lost);
     }
   }, [score, moves, currentLevelIndex, collectedColors, clearedJelly, clearedBlockers]);
 
-    const processMatchesAndRefill = useCallback(async (initialMatches: Position[][]) => {
-    isProcessing.current = true;
-    let currentGrid = JSON.parse(JSON.stringify(grid));
-    let matches = initialMatches;
-    let turnScore = 0;
-    let turnCollectedColors: Partial<Record<CrystalType, number>> = {};
-    let turnClearedJelly = 0;
-    let turnClearedBlockers = 0;
-    let combo = 0;
+    const processBoardStateUpdate = useCallback(async (
+        clearedPositions: Set<string>,
+        newlyFormedSpecials: {position: Position, special: SpecialType, type: CrystalType}[],
+        currentGrid: GridType
+    ) => {
+        let turnScore = 0;
+        let turnCollectedColors: Partial<Record<CrystalType, number>> = {};
+        let turnClearedJelly = 0;
+        let turnClearedBlockers = 0;
+        const combo = comboCount + 1;
 
-    const addScore = (amount: number, position: Position) => {
-        turnScore += amount;
-        setFloatingScores(prev => [...prev, { id: `fs-${Date.now()}-${Math.random()}`, score: amount, position }]);
-    };
-    
-    while (matches.length > 0) {
-        combo++;
-        setComboCount(combo);
-        if (combo > 1) playSound(SoundType[`Match${Math.min(combo, 4) as 2|3|4}`], 0.6);
-        else playSound(SoundType.Match1, 0.6);
+        const addScore = (amount: number, position: Position) => {
+            turnScore += amount;
+            setFloatingScores(prev => [...prev, { id: `fs-${Date.now()}-${Math.random()}`, score: amount, position }]);
+        };
 
-        const tilesToClear = new Set<string>();
-        const specialActivations: { pos: Position, special: SpecialType }[] = [];
-        
-        matches.flat().forEach(p => {
-            const crystal = currentGrid[p.row][p.col].crystal;
-            if (crystal?.special) {
-                specialActivations.push({ pos: p, special: crystal.special });
-            }
-        });
-
-        const allClearPositions = new Set<string>(matches.flat().map(p => `${p.row}-${p.col}`));
-
-        for(const {pos, special} of specialActivations) {
-            setActivatingCrystals(prev => new Set(prev).add(`${pos.row}-${pos.col}`));
-            switch(special) {
-                case SpecialType.StripedHorizontal:
-                    playSound(SoundType.StripedActivate, 0.7);
-                    setActiveEffects(prev => [...prev, {id: `eff-${Date.now()}`, type: SpecialEffectType.StripedBeam, position: pos, direction: 'horizontal'}]);
-                    for(let c = 0; c < GRID_SIZE; c++) allClearPositions.add(`${pos.row}-${c}`);
-                    break;
-                case SpecialType.StripedVertical:
-                     playSound(SoundType.StripedActivate, 0.7);
-                    setActiveEffects(prev => [...prev, {id: `eff-${Date.now()}`, type: SpecialEffectType.StripedBeam, position: pos, direction: 'vertical'}]);
-                    for(let r = 0; r < GRID_SIZE; r++) allClearPositions.add(`${r}-${pos.col}`);
-                    break;
-                case SpecialType.Wrapped:
-                    playSound(SoundType.WrappedActivate, 0.7);
-                    setActiveEffects(prev => [...prev, {id: `eff-${Date.now()}`, type: SpecialEffectType.WrappedExplosion, position: pos}]);
-                    for(let r = Math.max(0, pos.row-1); r <= Math.min(GRID_SIZE-1, pos.row+1); r++) {
-                        for(let c = Math.max(0, pos.col-1); c <= Math.min(GRID_SIZE-1, pos.col+1); c++) {
-                            allClearPositions.add(`${r}-${c}`);
-                        }
-                    }
-                    break;
-                case SpecialType.ColorBomb:
-                    playSound(SoundType.ColorBombActivate, 0.8);
-                    const targetType = currentGrid[pos.row][pos.col].crystal?.type;
-                    const targets: Position[] = [];
-                    if(targetType) {
-                        for(let r = 0; r < GRID_SIZE; r++) {
-                            for(let c = 0; c < GRID_SIZE; c++) {
-                                if(currentGrid[r][c].crystal?.type === targetType) {
-                                    allClearPositions.add(`${r}-${c}`);
-                                    targets.push({row:r, col:c});
-                                }
-                            }
-                        }
-                    }
-                     setActiveEffects(prev => [...prev, {id: `eff-${Date.now()}`, type: SpecialEffectType.ColorBombArcs, position: pos, targets, color: targetType}]);
-                    break;
-            }
-        }
-        await sleep(EFFECT_ANIMATION_DURATION / 2);
-
-        allClearPositions.forEach(posStr => {
+        clearedPositions.forEach(posStr => {
             const [row, col] = posStr.split('-').map(Number);
             const tile = currentGrid[row][col];
-            if(tile.crystal) {
+            if (tile.crystal) {
                 const type = tile.crystal.type;
                 turnCollectedColors[type] = (turnCollectedColors[type] || 0) + 1;
-                addScore(BASE_SCORE * combo, {row, col});
-                if (tile.crystal.special) addScore(SPECIAL_CRYSTAL_SCORE * combo, {row, col});
+                addScore(BASE_SCORE * combo, { row, col });
+                if (tile.crystal.special) addScore(SPECIAL_CRYSTAL_SCORE * combo, { row, col });
             }
-            if(tile.background === BackgroundType.Jelly) {
+            if (tile.background === BackgroundType.Jelly) {
                 tile.background = null;
                 turnClearedJelly++;
-                addScore(JELLY_CLEAR_SCORE * combo, {row, col});
+                addScore(JELLY_CLEAR_SCORE * combo, { row, col });
             } else if (tile.background === BackgroundType.Blocker) {
-                 tile.background = null;
-                 turnClearedBlockers++;
-                 addScore(BLOCKER_CLEAR_SCORE * combo, {row, col});
+                tile.background = null;
+                turnClearedBlockers++;
+                addScore(BLOCKER_CLEAR_SCORE * combo, { row, col });
             }
             tile.crystal = null;
-            tilesToClear.add(posStr);
         });
 
-        setClearingTiles(tilesToClear);
-        setShockwaveCrystals(tilesToClear);
+        setClearingTiles(clearedPositions);
+        setShockwaveCrystals(clearedPositions);
+        setComboCount(combo);
+        if (combo > 1) playSound(SoundType[`Match${Math.min(combo, 4) as 2 | 3 | 4}`], 0.6);
+        else playSound(SoundType.Match1, 0.6);
+
         await sleep(CLEAR_ANIMATION_DURATION);
-        
-        const newlyFormed = new Set<string>();
-        for (const match of matches) {
-            const pos = match[0];
-            if (match.length >= 5) {
-                currentGrid[pos.row][pos.col].crystal = { ...createNewCrystal(pos.row, pos.col), special: SpecialType.ColorBomb };
-                newlyFormed.add(`${pos.row}-${pos.col}`);
-            } else if (match.length >= 4) {
-                currentGrid[pos.row][pos.col].crystal = { ...createNewCrystal(pos.row, pos.col), special: Math.random() > 0.5 ? SpecialType.StripedHorizontal : SpecialType.StripedVertical };
-                newlyFormed.add(`${pos.row}-${pos.col}`);
-            }
-        }
-        setNewlyFormedCrystals(newlyFormed);
+
+        const newlyFormedIds = new Set<string>();
+        newlyFormedSpecials.forEach(({ position, special, type }) => {
+            currentGrid[position.row][position.col].crystal = { ...createNewCrystal(position.row, position.col, type), special };
+            newlyFormedIds.add(`${position.row}-${position.col}`);
+        });
+        setNewlyFormedCrystals(newlyFormedIds);
 
         setGrid(JSON.parse(JSON.stringify(currentGrid)));
         setClearingTiles(new Set());
         setActivatingCrystals(new Set());
         setShockwaveCrystals(new Set());
-        
+
         await sleep(100);
 
+        // Gravity
         for (let col = 0; col < GRID_SIZE; col++) {
             let emptyRow = GRID_SIZE - 1;
             for (let row = GRID_SIZE - 1; row >= 0; row--) {
                 if (currentGrid[row][col].crystal) {
-                    [currentGrid[emptyRow][col].crystal, currentGrid[row][col].crystal] = [currentGrid[row][col].crystal, currentGrid[emptyRow][col].crystal];
+                    if(row !== emptyRow) {
+                        [currentGrid[emptyRow][col].crystal, currentGrid[row][col].crystal] = [currentGrid[row][col].crystal, currentGrid[emptyRow][col].crystal];
+                    }
                     emptyRow--;
                 }
             }
@@ -367,6 +341,7 @@ export const App: React.FC = () => {
         setGrid(JSON.parse(JSON.stringify(currentGrid)));
         await sleep(FALL_ANIMATION_DURATION);
 
+        // Refill
         for (let row = 0; row < GRID_SIZE; row++) {
             for (let col = 0; col < GRID_SIZE; col++) {
                 if (!currentGrid[row][col].crystal && currentGrid[row][col].background !== BackgroundType.Blocker) {
@@ -378,35 +353,209 @@ export const App: React.FC = () => {
         setNewlyFormedCrystals(new Set());
         await sleep(FALL_ANIMATION_DURATION / 2);
 
-        matches = findMatches(currentGrid);
-    }
-    
-    setScore(s => s + turnScore);
-    setCollectedColors(prev => {
-        const newCollected = { ...prev };
-        for (const color in turnCollectedColors) {
-            newCollected[color as CrystalType] = (newCollected[color as CrystalType] || 0) + turnCollectedColors[color as CrystalType]!;
+        setScore(s => s + turnScore);
+        setCollectedColors(prev => {
+            const newCollected = { ...prev };
+            for (const color in turnCollectedColors) {
+                newCollected[color as CrystalType] = (newCollected[color as CrystalType] || 0) + turnCollectedColors[color as CrystalType]!;
+            }
+            return newCollected;
+        });
+        setClearedJelly(j => j + turnClearedJelly);
+        setClearedBlockers(b => b + turnClearedBlockers);
+        
+        return currentGrid;
+    }, [comboCount]);
+
+    const processMatchesAndRefill = useCallback(async (currentGrid: GridType) => {
+        isProcessing.current = true;
+        let matches = findMatches(currentGrid);
+        
+        while (matches.length > 0) {
+            const specialActivations: { pos: Position, special: SpecialType, type: CrystalType }[] = [];
+            const allClearPositions = new Set<string>();
+            const newlyFormedSpecials: {position: Position, special: SpecialType, type: CrystalType}[] = [];
+
+            matches.forEach(match => {
+                match.forEach(p => {
+                    const crystal = currentGrid[p.row][p.col].crystal;
+                    if(crystal?.special) {
+                        specialActivations.push({ pos: p, special: crystal.special, type: crystal.type });
+                    }
+                    allClearPositions.add(`${p.row}-${p.col}`);
+                });
+
+                const pos = match[0];
+                const crystalType = currentGrid[pos.row][pos.col].crystal?.type;
+                if(!crystalType) return;
+
+                if (match.some(p => newlyFormedCrystals.has(`${p.row}-${p.col}`))) return;
+                
+                const isTOrLShape = match.some(p1 => match.some(p2 => p1.row === p2.row && p1.col !== p2.col) && match.some(p3 => p1.col === p3.col && p1.row !== p3.row));
+
+                if (isTOrLShape || match.length >= 5) {
+                    newlyFormedSpecials.push({ position: pos, special: SpecialType.Wrapped, type: crystalType });
+                } else if (match.length >= 4) {
+                     const isHorizontal = match[0].row === match[1].row;
+                     newlyFormedSpecials.push({ position: pos, special: isHorizontal ? SpecialType.StripedVertical : SpecialType.StripedHorizontal, type: crystalType });
+                }
+            });
+
+            for (const { pos, special, type } of specialActivations) {
+                setActivatingCrystals(prev => new Set(prev).add(`${pos.row}-${pos.col}`));
+                switch (special) {
+                    case SpecialType.StripedHorizontal:
+                        playSound(SoundType.StripedActivate, 0.7);
+                        setActiveEffects(prev => [...prev, { id: `eff-${Date.now()}-${Math.random()}`, type: SpecialEffectType.StripedBeam, position: pos, direction: 'horizontal' }]);
+                        for (let c = 0; c < GRID_SIZE; c++) allClearPositions.add(`${pos.row}-${c}`);
+                        break;
+                    case SpecialType.StripedVertical:
+                        playSound(SoundType.StripedActivate, 0.7);
+                        setActiveEffects(prev => [...prev, { id: `eff-${Date.now()}-${Math.random()}`, type: SpecialEffectType.StripedBeam, position: pos, direction: 'vertical' }]);
+                        for (let r = 0; r < GRID_SIZE; r++) allClearPositions.add(`${r}-${pos.col}`);
+                        break;
+                    case SpecialType.Wrapped:
+                        playSound(SoundType.WrappedActivate, 0.7);
+                        setActiveEffects(prev => [...prev, { id: `eff-${Date.now()}-${Math.random()}`, type: SpecialEffectType.WrappedExplosion, position: pos }]);
+                        for (let r = Math.max(0, pos.row - 1); r <= Math.min(GRID_SIZE - 1, pos.row + 1); r++) {
+                            for (let c = Math.max(0, pos.col - 1); c <= Math.min(GRID_SIZE - 1, pos.col + 1); c++) {
+                                allClearPositions.add(`${r}-${c}`);
+                            }
+                        }
+                        break;
+                    case SpecialType.ColorBomb:
+                        playSound(SoundType.ColorBombActivate, 0.8);
+                        const targets: Position[] = [];
+                        for (let r = 0; r < GRID_SIZE; r++) {
+                            for (let c = 0; c < GRID_SIZE; c++) {
+                                if (currentGrid[r][c].crystal?.type === type) {
+                                    allClearPositions.add(`${r}-${c}`);
+                                    targets.push({ row: r, col: c });
+                                }
+                            }
+                        }
+                        setActiveEffects(prev => [...prev, { id: `eff-${Date.now()}-${Math.random()}`, type: SpecialEffectType.ColorBombArcs, position: pos, targets, color: type }]);
+                        break;
+                }
+            }
+            await sleep(EFFECT_ANIMATION_DURATION / 2);
+            
+            currentGrid = await processBoardStateUpdate(allClearPositions, newlyFormedSpecials, currentGrid);
+            matches = findMatches(currentGrid);
         }
-        return newCollected;
-    });
-    setClearedJelly(j => j + turnClearedJelly);
-    setClearedBlockers(b => b + turnClearedBlockers);
-    setGrid(currentGrid);
+
+        setGrid(currentGrid);
+        setComboCount(0);
+
+        if (findPossibleMoves(currentGrid).length === 0) {
+            await sleep(500);
+            setGrid(createInitialGrid(LEVELS[currentLevelIndex]));
+        }
+        
+        isProcessing.current = false;
+        checkWinLossConditions();
+    }, [processBoardStateUpdate, checkWinLossConditions, currentLevelIndex, createInitialGrid, newlyFormedCrystals]);
+
+  const handleSpecialCombo = useCallback(async (p1: Position, p2: Position) => {
+    isProcessing.current = true;
+    const c1 = grid[p1.row][p1.col].crystal;
+    const c2 = grid[p2.row][p2.col].crystal;
+    if (!c1?.special || !c2?.special) {
+        isProcessing.current = false;
+        return;
+    }
+
+    setLastNonInteractiveGrid({grid: JSON.parse(JSON.stringify(grid)), score, moves, collectedColors, clearedJelly, clearedBlockers});
+    setMoves(m => m - 1);
     setComboCount(0);
     
-    if (findPossibleMoves(currentGrid).length === 0) {
-        // Reshuffle logic
-        await sleep(500);
-        setGrid(createInitialGrid(LEVELS[currentLevelIndex]));
+    let currentGrid = JSON.parse(JSON.stringify(grid));
+    const allClearPositions = new Set<string>();
+    currentGrid[p1.row][p1.col].crystal = null;
+    currentGrid[p2.row][p2.col].crystal = null;
+    allClearPositions.add(`${p1.row}-${p1.col}`);
+    allClearPositions.add(`${p2.row}-${p2.col}`);
+    
+    const specials = [c1.special, c2.special].sort();
+    const comboType = `${specials[0]}+${specials[1]}`;
+    const centerPos = p1;
+
+    if(specials.includes(SpecialType.ColorBomb)) {
+        playSound(SoundType.ComboColorBomb, 0.9);
+        const otherCrystal = c1.special === SpecialType.ColorBomb ? c2 : c1;
+        
+        if(otherCrystal.special === SpecialType.ColorBomb) { // Double Color Bomb
+            setActiveEffects(prev => [...prev, {id: `eff-${Date.now()}`, type: SpecialEffectType.DoubleColorBombClear, position: centerPos}]);
+             for (let r = 0; r < GRID_SIZE; r++) for (let c = 0; c < GRID_SIZE; c++) allClearPositions.add(`${r}-${c}`);
+        } else { // Color Bomb + Other Special
+            const targetType = otherCrystal.type;
+            const targets: Position[] = [];
+            for (let r = 0; r < GRID_SIZE; r++) {
+              for (let c = 0; c < GRID_SIZE; c++) {
+                if (currentGrid[r][c].crystal?.type === targetType) {
+                  targets.push({row: r, col: c});
+                }
+              }
+            }
+            setActiveEffects(prev => [...prev, {id: `eff-${Date.now()}-arcs`, type: SpecialEffectType.ColorBombArcs, position: centerPos, targets, color: targetType}]);
+            await sleep(EFFECT_ANIMATION_DURATION);
+            
+            targets.forEach(pos => {
+                if (otherCrystal.special.startsWith('Striped')) {
+                    const direction = Math.random() > 0.5 ? 'horizontal' : 'vertical';
+                    setActiveEffects(prev => [...prev, {id: `eff-${Date.now()}-${pos.row}-${pos.col}`, type: SpecialEffectType.StripedBeam, position: pos, direction}]);
+                    if (direction === 'horizontal') for(let c=0; c<GRID_SIZE; c++) allClearPositions.add(`${pos.row}-${c}`);
+                    else for(let r=0; r<GRID_SIZE; r++) allClearPositions.add(`${r}-${pos.col}`);
+                } else if (otherCrystal.special === SpecialType.Wrapped) {
+                    setActiveEffects(prev => [...prev, {id: `eff-${Date.now()}-${pos.row}-${pos.col}`, type: SpecialEffectType.WrappedExplosion, position: pos}]);
+                    for(let r = Math.max(0, pos.row-1); r<=Math.min(GRID_SIZE-1, pos.row+1); r++) for(let c = Math.max(0, pos.col-1); c<=Math.min(GRID_SIZE-1, pos.col+1); c++) allClearPositions.add(`${r}-${c}`);
+                }
+            });
+        }
+    } else if (specials[0].startsWith('Striped') && specials[1].startsWith('Striped')) { // Double Striped
+        playSound(SoundType.StripedActivate, 0.8);
+        setActiveEffects(prev => [...prev, {id: `eff-${Date.now()}-h`, type: SpecialEffectType.StripedBeam, position: centerPos, direction: 'horizontal'}]);
+        setActiveEffects(prev => [...prev, {id: `eff-${Date.now()}-v`, type: SpecialEffectType.StripedBeam, position: centerPos, direction: 'vertical'}]);
+        for (let i = 0; i < GRID_SIZE; i++) {
+            allClearPositions.add(`${centerPos.row}-${i}`);
+            allClearPositions.add(`${i}-${centerPos.col}`);
+        }
+    } else if (specials.includes(SpecialType.Wrapped) && specials.some(s => s.startsWith('Striped'))) { // Striped + Wrapped
+        playSound(SoundType.ComboStripedWrapped, 0.9);
+        setActiveEffects(prev => [...prev, {id: `eff-${Date.now()}`, type: SpecialEffectType.StripedWrappedBlast, position: centerPos}]);
+        for(let i = 0; i < GRID_SIZE; i++) {
+            for(let d = -1; d <= 1; d++) {
+                allClearPositions.add(`${centerPos.row+d}-${i}`);
+                allClearPositions.add(`${i}-${centerPos.col+d}`);
+            }
+        }
+    } else if (specials[0] === SpecialType.Wrapped && specials[1] === SpecialType.Wrapped) { // Double Wrapped
+        playSound(SoundType.ComboDoubleWrapped, 0.9);
+        setActiveEffects(prev => [...prev, {id: `eff-${Date.now()}`, type: SpecialEffectType.DoubleWrappedBlast, position: centerPos}]);
+        for(let r = Math.max(0, centerPos.row-2); r<=Math.min(GRID_SIZE-1, centerPos.row+2); r++) {
+            for(let c = Math.max(0, centerPos.col-2); c<=Math.min(GRID_SIZE-1, centerPos.col+2); c++) {
+                allClearPositions.add(`${r}-${c}`);
+            }
+        }
     }
     
-    isProcessing.current = false;
-    checkWinLossConditions();
-  }, [grid, checkWinLossConditions, currentLevelIndex, createInitialGrid]);
+    await sleep(EFFECT_ANIMATION_DURATION);
+    const updatedGrid = await processBoardStateUpdate(allClearPositions, [], currentGrid);
+    await processMatchesAndRefill(updatedGrid);
+    
+  }, [grid, score, moves, collectedColors, clearedJelly, clearedBlockers, processBoardStateUpdate, processMatchesAndRefill]);
   
   const processMove = useCallback(async (p1: Position, p2: Position) => {
     if (isProcessing.current) return;
     isProcessing.current = true;
+    
+    const c1 = grid[p1.row][p1.col].crystal;
+    const c2 = grid[p2.row][p2.col].crystal;
+
+    if (c1?.special && c2?.special) {
+        await handleSpecialCombo(p1, p2);
+        return;
+    }
     
     setLastNonInteractiveGrid({grid: JSON.parse(JSON.stringify(grid)), score, moves, collectedColors, clearedJelly, clearedBlockers});
     setSelectedCrystal(null);
@@ -435,8 +584,8 @@ export const App: React.FC = () => {
     }
     
     setMoves(m => m - 1);
-    await processMatchesAndRefill(matches);
-  }, [grid, score, moves, collectedColors, clearedJelly, clearedBlockers, processMatchesAndRefill]);
+    await processMatchesAndRefill(newGrid);
+  }, [grid, score, moves, collectedColors, clearedJelly, clearedBlockers, processMatchesAndRefill, handleSpecialCombo]);
 
   const handleCrystalClick = useCallback(async (row: number, col: number) => {
     if (isProcessing.current || gameState !== GameState.Playing) return;
@@ -467,11 +616,9 @@ export const App: React.FC = () => {
   }, [grid, gameState, selectedCrystal, processMove]);
   
     useEffect(() => {
-        // Fix: The type for a timeout ID in the browser is `number`. `NodeJS.Timeout` is for Node.js environments.
-        // Declaring it as `number | undefined` also prevents a potential "used before assigned" error.
         let timer: number | undefined;
-        if (gameState === GameState.Playing && !isProcessing.current) {
-            timer = setTimeout(() => {
+        if (gameState === GameState.Playing && !isProcessing.current && !selectedCrystal) {
+            timer = window.setTimeout(() => {
                 const possibleMoves = findPossibleMoves(grid);
                 if (possibleMoves.length > 0) {
                     setHintedTiles(possibleMoves[Math.floor(Math.random() * possibleMoves.length)]);
@@ -479,7 +626,7 @@ export const App: React.FC = () => {
             }, 5000);
         }
         return () => clearTimeout(timer);
-    }, [grid, gameState, isProcessing.current]);
+    }, [grid, gameState, isProcessing.current, selectedCrystal]);
     
     useEffect(() => {
         const interval = setInterval(() => {
@@ -505,7 +652,8 @@ export const App: React.FC = () => {
         } else {
             localStorage.removeItem('nextLifeTimestamp');
         }
-    }, [lives, nextLifeTimestamp]);
+        localStorage.setItem('sarah-heart-progress', JSON.stringify(levelProgress));
+    }, [lives, nextLifeTimestamp, levelProgress]);
 
   const handlePause = () => setGameState(GameState.Paused);
   const handleResume = () => setGameState(GameState.Playing);
@@ -541,7 +689,7 @@ export const App: React.FC = () => {
   };
   
   if (gameState === GameState.LevelSelection) {
-    return <LevelSelectionScreen onSelectLevel={handleStartLevel} lives={lives} nextLifeTimestamp={nextLifeTimestamp} />;
+    return <LevelSelectionScreen onSelectLevel={handleStartLevel} lives={lives} nextLifeTimestamp={nextLifeTimestamp} levelProgress={levelProgress}/>;
   }
 
   const level = LEVELS[currentLevelIndex];
@@ -553,7 +701,7 @@ export const App: React.FC = () => {
               score={score}
               moves={moves}
               level={level.level}
-              targetScore={level.targetScore}
+              targetScore={level.starScores[0]}
               targetColors={level.targetColors}
               targetJelly={level.targetJelly}
               targetBlockers={level.targetBlockers}
@@ -585,6 +733,7 @@ export const App: React.FC = () => {
       <GameOverModal
         gameState={gameState}
         score={score}
+        currentLevelIndex={currentLevelIndex}
         onReplayLevel={handleRestart}
         onRestartGame={() => handleStartLevel(0)}
         onNextLevel={handleNextLevel}

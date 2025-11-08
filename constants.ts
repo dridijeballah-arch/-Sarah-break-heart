@@ -50,18 +50,21 @@ export const LEVELS: Level[] = [
     level: 1, 
     moves: 20, 
     targetScore: 1000,
+    starScores: [1000, 1500, 2000],
     targetColors: { [CrystalType.Red]: 25 }
   },
   { 
     level: 2, 
     moves: 25, 
     targetScore: 2000,
+    starScores: [2000, 3000, 4000],
     targetColors: { [CrystalType.Blue]: 30, [CrystalType.Green]: 30 } 
   },
   { 
     level: 3, 
     moves: 25, 
     targetJelly: 16,
+    starScores: [3000, 4500, 6000],
     layout: [
       '. j . j . j . j',
       'j . j . j . j .',
@@ -77,6 +80,7 @@ export const LEVELS: Level[] = [
     level: 4, 
     moves: 30, 
     targetJelly: 32,
+    starScores: [5000, 7500, 10000],
     layout: [
       'j . j . j . j .',
       '. j . j . j . j',
@@ -92,6 +96,7 @@ export const LEVELS: Level[] = [
     level: 5, 
     moves: 30, 
     targetBlockers: 8,
+    starScores: [4000, 6000, 8000],
     targetColors: { [CrystalType.Green]: 40, [CrystalType.Yellow]: 40 },
     layout: [
       'X . . . . . . X',
@@ -109,6 +114,7 @@ export const LEVELS: Level[] = [
     moves: 35, 
     targetJelly: 16,
     targetBlockers: 16,
+    starScores: [8000, 12000, 16000],
     layout: [
       '. . X j j X . .',
       '. . X j j X . .',
@@ -124,6 +130,7 @@ export const LEVELS: Level[] = [
     level: 7, 
     moves: 35, 
     targetBlockers: 16, 
+    starScores: [7000, 10500, 14000],
     targetColors: { [CrystalType.Orange]: 50, [CrystalType.Purple]: 50 },
     layout: [
       '. . . . . . . .',
@@ -141,6 +148,7 @@ export const LEVELS: Level[] = [
     moves: 40, 
     targetJelly: 20,
     targetBlockers: 24,
+    starScores: [10000, 15000, 20000],
     layout: [
       'X X j j j j X X',
       'X j . . . . j X',

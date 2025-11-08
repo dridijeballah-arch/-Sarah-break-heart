@@ -173,6 +173,29 @@ const DoubleColorBombClearEffect: React.FC<{ effect: ActiveEffect }> = ({ effect
   return <><style>{keyframes}</style><div style={style}></div></>;
 };
 
+const DoubleWrappedBlastEffect: React.FC<{ effect: ActiveEffect }> = ({ effect }) => {
+    if (!effect.position) return null;
+    const style: React.CSSProperties = {
+      position: 'absolute',
+      top: `${(effect.position.row + 0.5) * 12.5}%`,
+      left: `${(effect.position.col + 0.5) * 12.5}%`,
+      width: '25%', // 2 cells wide initially
+      height: '25%',
+      borderRadius: '50%',
+      background: 'rgba(255, 255, 255, 0.5)',
+      transform: 'translate(-50%, -50%) scale(0)',
+      animation: `double-wrapped-explosion ${EFFECT_ANIMATION_DURATION * 1.5}ms ease-out forwards`,
+    };
+    const keyframes = `
+      @keyframes double-wrapped-explosion {
+        0% { transform: translate(-50%, -50%) scale(0); opacity: 1; }
+        50% { transform: translate(-50%, -50%) scale(2.5); } /* 5x5 area */
+        100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; }
+      }
+    `;
+    return <><style>{keyframes}</style><div style={style}></div></>;
+};
+
 export const SpecialEffects: React.FC<SpecialEffectsProps> = ({ activeEffects }) => {
   return (
     <div className="absolute inset-0 pointer-events-none p-2" style={{ zIndex: 30 }}>
@@ -188,6 +211,8 @@ export const SpecialEffects: React.FC<SpecialEffectsProps> = ({ activeEffects })
                 return <StripedWrappedBlastEffect key={effect.id} effect={effect} />;
             case SpecialEffectType.DoubleColorBombClear:
                 return <DoubleColorBombClearEffect key={effect.id} effect={effect} />;
+            case SpecialEffectType.DoubleWrappedBlast:
+                return <DoubleWrappedBlastEffect key={effect.id} effect={effect} />;
           default:
             return null;
         }

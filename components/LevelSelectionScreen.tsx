@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { LEVELS, CRYSTAL_ICONS, MAX_LIVES } from '../constants';
 import { CrystalType } from '../types';
@@ -7,9 +6,24 @@ interface LevelSelectionScreenProps {
   onSelectLevel: (levelIndex: number) => void;
   lives: number;
   nextLifeTimestamp: number | null;
+  levelProgress: Record<number, number>;
 }
 
-export const LevelSelectionScreen: React.FC<LevelSelectionScreenProps> = ({ onSelectLevel, lives, nextLifeTimestamp }) => {
+const Star: React.FC<{ filled: boolean }> = ({ filled }) => (
+    <svg 
+      xmlns="http://www.w3.org/2000/svg" 
+      viewBox="0 0 24 24" 
+      className={`w-5 h-5 ${filled ? 'text-yellow-400' : 'text-slate-600'}`}
+    >
+      <path 
+        fill="currentColor" 
+        d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" 
+      />
+    </svg>
+);
+
+
+export const LevelSelectionScreen: React.FC<LevelSelectionScreenProps> = ({ onSelectLevel, lives, nextLifeTimestamp, levelProgress }) => {
   const [timeLeft, setTimeLeft] = useState('');
 
   useEffect(() => {
@@ -71,13 +85,18 @@ export const LevelSelectionScreen: React.FC<LevelSelectionScreenProps> = ({ onSe
           >
             <div className="flex justify-between items-center mb-2">
               <h2 className="text-3xl font-bold text-cyan-300">Niveau {level.level}</h2>
+               <div className="flex">
+                  {[...Array(3)].map((_, i) => (
+                      <Star key={i} filled={i < (levelProgress[index] || 0)} />
+                  ))}
+              </div>
             </div>
             <div className="space-y-2 text-slate-300">
                 <p><strong>Coups :</strong> {level.moves}</p>
                 <div>
                   <strong>Objectifs :</strong>
                   <div className="flex gap-3 mt-1 flex-wrap items-center">
-                    {level.targetScore && <span>Score: {level.targetScore.toLocaleString()}</span>}
+                    {level.targetScore && <span>Score: {level.starScores[0].toLocaleString()}</span>}
                     {level.targetColors && (Object.keys(level.targetColors) as CrystalType[]).map(color => (
                       <div key={color} className="flex items-center gap-1">
                         <span className="text-xl">{CRYSTAL_ICONS[color]}</span>
