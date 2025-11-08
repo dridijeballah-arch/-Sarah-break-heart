@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
+// Fix: Use a named import for the App component, as it does not have a default export.
+import { App } from './App';
 
 // Register the service worker for PWA functionality
 if ('serviceWorker' in navigator) {
