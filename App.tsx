@@ -46,6 +46,20 @@ const createNewCrystal = (row: number, col: number, type?: CrystalType): Crystal
   type: type || CRYSTAL_TYPES[Math.floor(Math.random() * CRYSTAL_TYPES.length)],
 });
 
+const getValidCrystalTypes = (grid: GridType, currentRow: Tile[], row: number, col: number): CrystalType[] => {
+  let possibleTypes = [...CRYSTAL_TYPES];
+  // Check left
+  if (col > 1 && currentRow[col - 1].crystal?.type === currentRow[col - 2].crystal?.type) {
+    possibleTypes = possibleTypes.filter(t => t !== currentRow[col - 1].crystal!.type);
+  }
+  // Check up
+  if (row > 1 && grid[row - 1][col].crystal?.type === grid[row - 2][col].crystal?.type) {
+    possibleTypes = possibleTypes.filter(t => t !== grid[row - 1][col].crystal!.type);
+  }
+  if (possibleTypes.length === 0) return [CRYSTAL_TYPES[Math.floor(Math.random() * CRYSTAL_TYPES.length)]];
+  return possibleTypes;
+};
+
 export const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(GameState.LevelSelection);
   const [grid, setGrid] = useState<GridType>([]);
@@ -71,7 +85,6 @@ export const App: React.FC = () => {
   
   const [isShaking, setIsShaking] = useState(false);
   const [hintedTiles, setHintedTiles] = useState<[Position, Position] | null>(null);
-  const hintTimeoutRef = useRef<number | null>(null);
   const [isHintLoading, setIsHintLoading] = useState(false);
   
   const [lives, setLives] = useState(() => {
@@ -89,20 +102,6 @@ export const App: React.FC = () => {
 
   const isProcessing = useRef(false);
 
-  const getValidCrystalTypes = (currentGrid: GridType, row: number, col: number): CrystalType[] => {
-    let possibleTypes = [...CRYSTAL_TYPES];
-    // Check left
-    if (col > 1 && currentGrid[row][col - 1].crystal?.type === currentGrid[row][col - 2].crystal?.type) {
-      possibleTypes = possibleTypes.filter(t => t !== currentGrid[row][col - 1].crystal!.type);
-    }
-    // Check up
-    if (row > 1 && currentGrid[row - 1][col].crystal?.type === currentGrid[row - 2][col].crystal?.type) {
-      possibleTypes = possibleTypes.filter(t => t !== currentGrid[row - 1][col].crystal!.type);
-    }
-    if (possibleTypes.length === 0) return [CRYSTAL_TYPES[Math.floor(Math.random() * CRYSTAL_TYPES.length)]];
-    return possibleTypes;
-  };
-
   const createInitialGrid = useCallback((level: Level): GridType => {
     let newGrid: GridType = [];
     do {
@@ -115,7 +114,7 @@ export const App: React.FC = () => {
           if (layoutChar === 'j') background = BackgroundType.Jelly;
           else if (layoutChar === 'X') background = BackgroundType.Blocker;
           
-          const validTypes = getValidCrystalTypes(newGrid, row, col);
+          const validTypes = getValidCrystalTypes(newGrid, newRow, row, col);
           const crystalType = validTypes[Math.floor(Math.random() * validTypes.length)];
           const crystal = background === BackgroundType.Blocker ? null : createNewCrystal(row, col, crystalType);
           newRow.push({ id: `tile-${row}-${col}`, crystal, background });
@@ -242,6 +241,8 @@ export const App: React.FC = () => {
 
   const checkWinLossConditions = useCallback(() => {
     const level = LEVELS[currentLevelIndex];
+    if (!level) return;
+
     let scoreMet = !level.targetScore || score >= level.targetScore;
     let colorsMet = !level.targetColors || (Object.keys(level.targetColors) as CrystalType[]).every(color => (collectedColors[color] || 0) >= level.targetColors![color]!);
     let jellyMet = !level.targetJelly || clearedJelly >= level.targetJelly;
@@ -328,13 +329,23 @@ export const App: React.FC = () => {
 
         // Gravity
         for (let col = 0; col < GRID_SIZE; col++) {
-            let emptyRow = GRID_SIZE - 1;
-            for (let row = GRID_SIZE - 1; row >= 0; row--) {
+            const crystalsInCol: Crystal[] = [];
+            // Step 1: Collect all crystals in the column and clear them from the grid
+            for (let row = 0; row < GRID_SIZE; row++) {
                 if (currentGrid[row][col].crystal) {
-                    if(row !== emptyRow) {
-                        [currentGrid[emptyRow][col].crystal, currentGrid[row][col].crystal] = [currentGrid[row][col].crystal, currentGrid[emptyRow][col].crystal];
+                    crystalsInCol.push(currentGrid[row][col].crystal!);
+                    currentGrid[row][col].crystal = null;
+                }
+            }
+
+            // Step 2: Place crystals back, starting from the bottom, skipping blockers
+            let crystalIdx = crystalsInCol.length - 1;
+            for (let row = GRID_SIZE - 1; row >= 0; row--) {
+                if (currentGrid[row][col].background !== BackgroundType.Blocker) {
+                    if (crystalIdx >= 0) {
+                        currentGrid[row][col].crystal = crystalsInCol[crystalIdx];
+                        crystalIdx--;
                     }
-                    emptyRow--;
                 }
             }
         }
@@ -477,7 +488,6 @@ export const App: React.FC = () => {
     allClearPositions.add(`${p2.row}-${p2.col}`);
     
     const specials = [c1.special, c2.special].sort();
-    const comboType = `${specials[0]}+${specials[1]}`;
     const centerPos = p1;
 
     if(specials.includes(SpecialType.ColorBomb)) {
@@ -498,6 +508,7 @@ export const App: React.FC = () => {
               }
             }
             setActiveEffects(prev => [...prev, {id: `eff-${Date.now()}-arcs`, type: SpecialEffectType.ColorBombArcs, position: centerPos, targets, color: targetType}]);
+            setActivatingCrystals(prev => new Set([...prev, ...targets.map(p => `${p.row}-${p.col}`)]));
             await sleep(EFFECT_ANIMATION_DURATION);
             
             targets.forEach(pos => {
@@ -593,7 +604,6 @@ export const App: React.FC = () => {
     const clickedCrystal = grid[row]?.[col]?.crystal;
     if (!clickedCrystal) return;
 
-    if (hintTimeoutRef.current) clearTimeout(hintTimeoutRef.current);
     setHintedTiles(null);
 
     if (selectedCrystal) {
@@ -615,9 +625,10 @@ export const App: React.FC = () => {
     }
   }, [grid, gameState, selectedCrystal, processMove]);
   
+    // Effet pour montrer une suggestion après 5 secondes d'inactivité
     useEffect(() => {
         let timer: number | undefined;
-        if (gameState === GameState.Playing && !isProcessing.current && !selectedCrystal) {
+        if (gameState === GameState.Playing && !isProcessing.current && !selectedCrystal && !hintedTiles) {
             timer = window.setTimeout(() => {
                 const possibleMoves = findPossibleMoves(grid);
                 if (possibleMoves.length > 0) {
@@ -626,7 +637,18 @@ export const App: React.FC = () => {
             }, 5000);
         }
         return () => clearTimeout(timer);
-    }, [grid, gameState, isProcessing.current, selectedCrystal]);
+    }, [grid, gameState, isProcessing.current, selectedCrystal, hintedTiles]);
+    
+    // Effet pour faire disparaître la suggestion après 3 secondes
+    useEffect(() => {
+        if (!hintedTiles) {
+            return;
+        }
+        const timerId = window.setTimeout(() => {
+            setHintedTiles(null);
+        }, 3000); // La suggestion est visible pendant 3 secondes
+        return () => clearTimeout(timerId);
+    }, [hintedTiles]);
     
     useEffect(() => {
         const interval = setInterval(() => {
@@ -655,6 +677,15 @@ export const App: React.FC = () => {
         localStorage.setItem('sarah-heart-progress', JSON.stringify(levelProgress));
     }, [lives, nextLifeTimestamp, levelProgress]);
 
+    const level = LEVELS[currentLevelIndex];
+
+    useEffect(() => {
+      if (gameState !== GameState.LevelSelection && !level) {
+        console.error(`Invalid level index: ${currentLevelIndex}. Resetting to level selection.`);
+        setGameState(GameState.LevelSelection);
+      }
+    }, [gameState, level, currentLevelIndex]);
+
   const handlePause = () => setGameState(GameState.Paused);
   const handleResume = () => setGameState(GameState.Playing);
   const handleQuit = () => setGameState(GameState.LevelSelection);
@@ -679,6 +710,7 @@ export const App: React.FC = () => {
   const handleGetHint = () => {
       if(isHintLoading) return;
       setIsHintLoading(true);
+      setHintedTiles(null); // Efface la suggestion précédente immédiatement
       setTimeout(() => {
           const possibleMoves = findPossibleMoves(grid);
           if (possibleMoves.length > 0) {
@@ -691,8 +723,11 @@ export const App: React.FC = () => {
   if (gameState === GameState.LevelSelection) {
     return <LevelSelectionScreen onSelectLevel={handleStartLevel} lives={lives} nextLifeTimestamp={nextLifeTimestamp} levelProgress={levelProgress}/>;
   }
-
-  const level = LEVELS[currentLevelIndex];
+  
+  if (!level) {
+    // This will be shown for a single frame before the useEffect kicks in to reset the state.
+    return null; 
+  }
 
   return (
     <div className="bg-slate-900 min-h-screen flex flex-col items-center justify-center p-2 font-sans overflow-hidden">
@@ -701,7 +736,7 @@ export const App: React.FC = () => {
               score={score}
               moves={moves}
               level={level.level}
-              targetScore={level.starScores[0]}
+              targetScore={level.targetScore}
               targetColors={level.targetColors}
               targetJelly={level.targetJelly}
               targetBlockers={level.targetBlockers}

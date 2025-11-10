@@ -96,7 +96,7 @@ export const LevelSelectionScreen: React.FC<LevelSelectionScreenProps> = ({ onSe
                 <div>
                   <strong>Objectifs :</strong>
                   <div className="flex gap-3 mt-1 flex-wrap items-center">
-                    {level.targetScore && <span>Score: {level.starScores[0].toLocaleString()}</span>}
+                    {level.targetScore && <span>Score: {level.targetScore.toLocaleString()}</span>}
                     {level.targetColors && (Object.keys(level.targetColors) as CrystalType[]).map(color => (
                       <div key={color} className="flex items-center gap-1">
                         <span className="text-xl">{CRYSTAL_ICONS[color]}</span>

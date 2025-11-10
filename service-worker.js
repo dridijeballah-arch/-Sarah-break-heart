@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sarah-break-heart-v5';
+const CACHE_NAME = 'sarah-break-heart-v6';
 const urlsToCache = [
   '/',
   '/index.html',

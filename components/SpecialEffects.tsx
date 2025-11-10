@@ -122,31 +122,30 @@ const StripedWrappedBlastEffect: React.FC<{ effect: ActiveEffect }> = ({ effect 
   if (!effect.position) return null;
   const beamStyle: React.CSSProperties = {
     position: 'absolute',
-    background: 'white',
+    background: 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0) 100%)',
     borderRadius: '9999px',
-    boxShadow: '0 0 20px 10px white',
     transformOrigin: 'center',
-    animation: `beam-travel ${EFFECT_ANIMATION_DURATION}ms ease-out forwards`,
-    transform: 'scale(0)'
   };
   
-  const horizontalBeamStyle = { ...beamStyle, top: `${effect.position.row * 12.5 - 12.5/2}%`, left: '0%', width: '100%', height: '37.5%', animationName: 'beam-travel-x' };
-  const verticalBeamStyle = { ...beamStyle, left: `${effect.position.col * 12.5 - 12.5/2}%`, top: '0%', height: '100%', width: '37.5%', animationName: 'beam-travel-y' };
-
-  const keyframes = `
-    @keyframes beam-travel-x {
-      from { transform: scaleX(0); }
-      to { transform: scaleX(1); }
-    }
-    @keyframes beam-travel-y {
-      from { transform: scaleY(0); }
-      to { transform: scaleY(1); }
-    }
-  `;
+  const horizontalBeamStyle: React.CSSProperties = { 
+      ...beamStyle, 
+      top: `${(effect.position.row - 1) * 12.5}%`,
+      left: '0%', 
+      width: '100%', 
+      height: '37.5%',
+      animation: `energy-pulse-x ${EFFECT_ANIMATION_DURATION * 1.2}ms ease-out forwards` 
+  };
+  const verticalBeamStyle: React.CSSProperties = { 
+      ...beamStyle, 
+      left: `${(effect.position.col - 1) * 12.5}%`,
+      top: '0%', 
+      height: '100%', 
+      width: '37.5%',
+      animation: `energy-pulse-y ${EFFECT_ANIMATION_DURATION * 1.2}ms ease-out forwards` 
+  };
 
   return (
     <>
-      <style>{keyframes}</style>
       <div style={horizontalBeamStyle}></div>
       <div style={verticalBeamStyle}></div>
     </>
@@ -154,23 +153,19 @@ const StripedWrappedBlastEffect: React.FC<{ effect: ActiveEffect }> = ({ effect 
 };
 
 const DoubleColorBombClearEffect: React.FC<{ effect: ActiveEffect }> = ({ effect }) => {
-  const style: React.CSSProperties = {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    width: '100vw',
-    height: '100vh',
-    background: 'white',
-    zIndex: 100,
-    animation: `flash-out ${EFFECT_ANIMATION_DURATION * 1.5}ms ease-out forwards`,
-  };
-  const keyframes = `
-    @keyframes flash-out {
-      from { opacity: 0.8; }
-      to { opacity: 0; }
-    }
-  `;
-  return <><style>{keyframes}</style><div style={style}></div></>;
+    if (!effect.position) return null;
+    const style: React.CSSProperties = {
+        position: 'absolute',
+        top: `${(effect.position.row + 0.5) * 12.5}%`,
+        left: `${(effect.position.col + 0.5) * 12.5}%`,
+        width: '12.5%',
+        height: '12.5%',
+        borderRadius: '50%',
+        transform: 'translate(-50%, -50%) scale(0)',
+        animation: `rainbow-shockwave ${EFFECT_ANIMATION_DURATION * 2}ms ease-out forwards, rainbow-colors 4s linear infinite`,
+    };
+
+    return <div style={style}></div>;
 };
 
 const DoubleWrappedBlastEffect: React.FC<{ effect: ActiveEffect }> = ({ effect }) => {
@@ -182,18 +177,10 @@ const DoubleWrappedBlastEffect: React.FC<{ effect: ActiveEffect }> = ({ effect }
       width: '25%', // 2 cells wide initially
       height: '25%',
       borderRadius: '50%',
-      background: 'rgba(255, 255, 255, 0.5)',
       transform: 'translate(-50%, -50%) scale(0)',
-      animation: `double-wrapped-explosion ${EFFECT_ANIMATION_DURATION * 1.5}ms ease-out forwards`,
+      animation: `mega-explosion-shockwave ${EFFECT_ANIMATION_DURATION * 1.5}ms ease-out forwards`,
     };
-    const keyframes = `
-      @keyframes double-wrapped-explosion {
-        0% { transform: translate(-50%, -50%) scale(0); opacity: 1; }
-        50% { transform: translate(-50%, -50%) scale(2.5); } /* 5x5 area */
-        100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; }
-      }
-    `;
-    return <><style>{keyframes}</style><div style={style}></div></>;
+    return <div style={style}></div>;
 };
 
 export const SpecialEffects: React.FC<SpecialEffectsProps> = ({ activeEffects }) => {
